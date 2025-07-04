@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { login } from "../services/auth"; // Đảm bảo bạn có file này
+import { login } from "../services/auth"; // Hàm login gọi API
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -14,12 +14,21 @@ const Login: React.FC = () => {
     setError("");
 
     try {
-      const data = await login(email, password); // Gọi API
-      localStorage.setItem("username", data.name || "Người dùng");
-      localStorage.setItem("token", data.token || ""); // nếu có
+      const data = await login(email, password); // Gọi API backend
+
+      // Lưu token và tên người dùng (nếu có)
+      localStorage.setItem("token", data.token || "");
+      localStorage.setItem("username", data.user?.first_name || "Người dùng");
+
+      // Điều hướng về trang chủ
       navigate("/");
-    } catch {
-      setError("Đăng nhập thất bại. Vui lòng kiểm tra lại.");
+    } catch (err: unknown) {
+      console.error("Lỗi đăng nhập:", err);
+      if (err instanceof Error) {
+        setError(err.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại.");
+      } else {
+        setError("Đăng nhập thất bại. Vui lòng kiểm tra lại.");
+      }
     }
   };
 
