@@ -10,13 +10,14 @@ function App() {
     <div className="App">
       <Router>
         <Routes>
-          {/* Các route không dùng layout */}
+          {/* Public routes (no layout) */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
 
-          {/* Các route có layout (Navbar, Sidebar, Footer) */}
+          {/* Protected / Main routes with layout */}
           <Route element={<DefaultLayout />}>
-            <Route path="/" element={<Dashboard />} />
+            <Route index element={<Dashboard />} />
+            {/* Có thể thêm các route khác trong layout ở đây */}
           </Route>
         </Routes>
       </Router>

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { register } from "../services/auth"; // Gọi từ auth.ts
+import {AxiosError} from "axios";
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
@@ -15,12 +16,18 @@ const Register: React.FC = () => {
     setError("");
 
     try {
-      await register(name, email, password); // Gọi API
-      alert("Đăng ký thành công! Mời bạn đăng nhập.");
-      navigate("/login");
-    } catch {
-      setError("Đăng ký thất bại. Vui lòng thử lại.");
-    }
+    await register(name, email, password); // Gọi API
+    alert("Đăng ký thành công! Mời bạn đăng nhập.");
+    navigate("/login");
+  } catch (err: unknown) {
+    const error = err as AxiosError<{ message?: string }>;
+    console.error("Lỗi đăng ký:", error.response?.data || error.message);
+    setError(
+      error.response?.data?.message ||
+      error.message ||
+      "Đăng ký thất bại. Vui lòng thử lại."
+    );
+  }
   };
 
   return (
