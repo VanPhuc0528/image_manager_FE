@@ -1,33 +1,33 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { register } from "../services/auth";
-import { AxiosError } from "axios";
+import { register } from "../services/auth"; // Gọi từ auth.ts
+import {AxiosError} from "axios";
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
 
-  const [name, setName] = useState("");       // full name
-  const [email, setEmail] = useState("");     // email
-  const [password, setPassword] = useState(""); // password
-  const [error, setError] = useState("");     // error message
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
     try {
-      await register(name, email, password); // Gọi API backend
-      alert("Đăng ký thành công! Mời bạn đăng nhập.");
-      navigate("/login");
-    } catch (err: unknown) {
-      const error = err as AxiosError<{ message?: string }>;
-      console.error("Lỗi đăng ký:", error.response?.data || error.message);
-      setError(
-        error.response?.data?.message ||
-          error.message ||
-          "Đăng ký thất bại. Vui lòng thử lại."
-      );
-    }
+    await register(name, email, password); // Gọi API
+    alert("Đăng ký thành công! Mời bạn đăng nhập.");
+    navigate("/login");
+  } catch (err: unknown) {
+    const error = err as AxiosError<{ message?: string }>;
+    console.error("Lỗi đăng ký:", error.response?.data || error.message);
+    setError(
+      error.response?.data?.message ||
+      error.message ||
+      "Đăng ký thất bại. Vui lòng thử lại."
+    );
+  }
   };
 
   return (
@@ -48,7 +48,6 @@ const Register: React.FC = () => {
           onChange={(e) => setName(e.target.value)}
           required
         />
-
         <input
           type="email"
           placeholder="Email"
@@ -57,7 +56,6 @@ const Register: React.FC = () => {
           onChange={(e) => setEmail(e.target.value)}
           required
         />
-
         <input
           type="password"
           placeholder="Mật khẩu"

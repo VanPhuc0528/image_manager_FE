@@ -1,3 +1,4 @@
+// App.tsx
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import "./index.css";
 import DefaultLayout from "./layouts/DefaultLayout";
@@ -7,21 +8,20 @@ import Dashboard from "./pages/Dashboard";
 
 function App() {
   return (
-    <div className="App">
-      <Router>
-        <Routes>
-          {/* Public routes (no layout) */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+    <Router>
+      <Routes>
+        {/* Public routes */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
 
-          {/* Protected / Main routes with layout */}
-          <Route element={<DefaultLayout />}>
-            <Route index element={<Dashboard />} />
-            {/* Có thể thêm các route khác trong layout ở đây */}
-          </Route>
-        </Routes>
-      </Router>
-    </div>
+        {/* Main layout routes */}
+        <Route element={<DefaultLayout />}>
+          <Route index element={<Dashboard />} />
+          <Route path="folder/:id" element={<Dashboard />} />
+          {/* Nếu muốn thêm route khác dùng chung layout, thêm tại đây */}
+        </Route>
+      </Routes>
+    </Router>
   );
 }
 

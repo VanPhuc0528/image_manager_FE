@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import FolderTree from "../components/FolderTree";
 import ImageGrid from "../components/ImageGrid";
 import FolderConfig from "../components/FolderConfig";
+import { useNavigate, useParams } from "react-router-dom";
+import type { ImageItem } from "../types";
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "1070318039881-53p11ea9cvllv03g594jg28t7br02kgv.apps.googleusercontent.com";
 const DEVELOPER_KEY = import.meta.env.VITE_GOOGLE_DEVELOPER_KEY || "AIzaSyAqWGu8sO8GBBHZYjZ9tvdAjBD4JRptrYs";
@@ -15,18 +17,9 @@ interface Folder {
   allowSync?: boolean;
 }
 
-interface ImageItem {
-  id: number;
-  name: string;
-  url: string;
-  folderId: number;
-}
-
 interface GooglePickerFile {
   id: string;
   name: string;
-  thumbnailLink?: string;
-  webContentLink?: string;
 }
 
 interface GooglePickerData {
@@ -42,6 +35,10 @@ declare global {
 }
 
 const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const selectedFolderId = id ? parseInt(id) : null;
+
   const [folders, setFolders] = useState<Folder[]>([
     { id: 1, name: "Ảnh cá nhân", parentId: null, allowUpload: true, allowSync: true },
     { id: 2, name: "Ảnh sự kiện", parentId: 1, allowUpload: true, allowSync: false },
@@ -50,7 +47,6 @@ const Dashboard: React.FC = () => {
   ]);
 
   const [images, setImages] = useState<ImageItem[]>([]);
-  const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const accessTokenRef = useRef<string | null>(null);
@@ -88,6 +84,21 @@ const Dashboard: React.FC = () => {
     loadApis();
   }, []);
 
+  useEffect(() => {
+    const fetchImages = async () => {
+      try {
+        const res = await fetch("http://localhost:8000/images");
+        const data: ImageItem[] = await res.json();
+        setImages(data);
+      } catch (err) {
+        console.error("Lỗi khi tải ảnh:", err);
+        setError("Không thể tải ảnh từ server.");
+      }
+    };
+
+    fetchImages();
+  }, []);
+
   const handleSyncDrive = () => {
     if (!selectedFolderId || !selectedFolder?.allowSync || !window.google?.accounts?.oauth2) return;
 
@@ -99,6 +110,7 @@ const Dashboard: React.FC = () => {
         showPicker(tokenResponse.access_token);
       },
     });
+
     tokenClient.requestAccessToken();
   };
 
@@ -113,15 +125,34 @@ const Dashboard: React.FC = () => {
       .addView(view)
       .addView(new window.google.picker.DocsUploadView())
       .setDeveloperKey(DEVELOPER_KEY)
-      .setCallback((data: GooglePickerData) => {
+      .setCallback(async (data: GooglePickerData) => {
         if (data.action === window.google.picker.Action.PICKED && selectedFolderId !== null) {
           const newImages: ImageItem[] = data.docs.map((file, idx) => ({
             id: Date.now() + idx,
             name: file.name,
-            url: file.thumbnailLink || file.webContentLink || "",
+            url: `https://drive.google.com/uc?export=view&id=${file.id}`,
             folderId: selectedFolderId,
+            createdAt: new Date().toISOString(),
           }));
-          setImages(prev => [...prev, ...newImages]);
+
+          try {
+            for (const img of newImages) {
+              await fetch("http://localhost:8000/api/images/from-drive", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${accessToken}`,
+                },
+                body: JSON.stringify(img),
+              });
+            }
+
+            setImages(prev => [...prev, ...newImages]);
+            console.log("✅ Access Token đã gửi:", accessToken);
+          } catch (err) {
+            setError("Không thể lưu ảnh từ Google Drive.");
+            console.error("❌", err);
+          }
         }
       })
       .build();
@@ -147,25 +178,14 @@ const Dashboard: React.FC = () => {
           body: formData,
         });
 
-        const contentType = res.headers.get("content-type") || "";
-
-        let result: any = {};
-        if (res.ok && contentType.includes("application/json")) {
-          result = await res.json();
-        } else {
-          const text = await res.text();
-          console.warn("⚠️ Backend không trả JSON:", text);
-          result = {
-            name: file.name,
-            url: URL.createObjectURL(file),
-          };
-        }
+        const result = await res.json();
 
         return {
           id: Date.now() + idx,
           name: result.name || file.name,
-          url: result.url || URL.createObjectURL(file),
+          url: result.url,
           folderId: selectedFolderId,
+          createdAt: new Date().toISOString(),
         };
       });
 
@@ -183,7 +203,13 @@ const Dashboard: React.FC = () => {
     if (!name) return;
     setFolders(prev => [
       ...prev,
-      { id: Date.now(), name: name.trim(), parentId, allowUpload: true, allowSync: true },
+      {
+        id: Date.now(),
+        name: name.trim(),
+        parentId,
+        allowUpload: true,
+        allowSync: true,
+      },
     ]);
   };
 
@@ -203,7 +229,6 @@ const Dashboard: React.FC = () => {
 
     setFolders(prev => deleteRecursively(id, prev));
     setImages(prev => prev.filter(img => img.folderId !== id));
-    if (selectedFolderId === id) setSelectedFolderId(null);
   };
 
   return (
@@ -211,7 +236,7 @@ const Dashboard: React.FC = () => {
       <FolderTree
         folders={folders}
         selectedId={selectedFolderId}
-        onSelectFolder={setSelectedFolderId}
+        onSelectFolder={(id) => navigate(`/folder/${id}`)}
         onAddFolder={handleAddFolder}
         onDeleteFolder={handleDeleteFolder}
       />
@@ -219,7 +244,7 @@ const Dashboard: React.FC = () => {
         {loading && <div className="text-blue-500 mb-4">Đang tải...</div>}
         {error && (
           <div className="text-red-600 mb-4">
-            {error}{" "}
+            {error}
             <button className="ml-2 text-sm underline" onClick={() => setError(null)}>
               Đóng
             </button>
@@ -230,13 +255,15 @@ const Dashboard: React.FC = () => {
             <FolderConfig folder={selectedFolder} onUpdate={handleUpdateFolder} />
           </div>
         )}
+
         <ImageGrid
           folderId={selectedFolderId}
           folders={folders}
           images={images}
-          onUpload={handleUpload}
           onSyncDrive={handleSyncDrive}
-          onSelectFolder={setSelectedFolderId}
+          onSelectFolder={(id) => navigate(`/folder/${id}`)}
+          onUploaded={(newImgs) => setImages(prev => [...prev, ...newImgs])}
+          onUpload={handleUpload}
         />
       </div>
     </div>

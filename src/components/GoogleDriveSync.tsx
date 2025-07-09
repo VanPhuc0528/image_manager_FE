@@ -11,11 +11,7 @@ interface GoogleImage {
   thumbnailLink: string;
 }
 
-interface GoogleDriveSyncProps {
-  onSync: (selectedImages: GoogleImage[]) => void;
-}
-
-const GoogleDriveSync: React.FC<GoogleDriveSyncProps> = ({ onSync }) => {
+const GoogleDriveSync: React.FC = () => {
   const [images, setImages] = useState<GoogleImage[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const accessTokenRef = useRef<string | null>(null);
@@ -25,7 +21,7 @@ const GoogleDriveSync: React.FC<GoogleDriveSyncProps> = ({ onSync }) => {
       const script = document.createElement("script");
       script.src = "https://apis.google.com/js/api.js";
       script.onload = () => {
-        window.gapi.load("client", initClient);
+        window.gapi.load("client:auth2", initClient); // ✅ thêm auth2
       };
       document.body.appendChild(script);
     };
@@ -39,11 +35,18 @@ const GoogleDriveSync: React.FC<GoogleDriveSyncProps> = ({ onSync }) => {
           discoveryDocs: [DISCOVERY_DOC],
         })
         .then(() => {
-          window.gapi.auth2.getAuthInstance().signIn().then(() => {
-            const token = window.gapi.auth.getToken().access_token;
-            accessTokenRef.current = token;
+          const authInstance = window.gapi.auth2.getAuthInstance();
+          if (!authInstance.isSignedIn.get()) {
+            authInstance.signIn().then(() => {
+              const token = window.gapi.auth.getToken()?.access_token;
+              accessTokenRef.current = token || null;
+              fetchDriveImages();
+            });
+          } else {
+            const token = window.gapi.auth.getToken()?.access_token;
+            accessTokenRef.current = token || null;
             fetchDriveImages();
-          });
+          }
         });
     };
 
@@ -58,8 +61,7 @@ const GoogleDriveSync: React.FC<GoogleDriveSyncProps> = ({ onSync }) => {
         pageSize: 20,
       })
       .then((response: { result: { files: GoogleImage[] } }) => {
-        const files = response.result.files as GoogleImage[];
-        setImages(files);
+        setImages(response.result.files || []);
       });
   };
 
@@ -75,9 +77,33 @@ const GoogleDriveSync: React.FC<GoogleDriveSyncProps> = ({ onSync }) => {
     });
   };
 
-  const handleSync = () => {
+  const handleSync = async () => {
+    const token = accessTokenRef.current;
+    if (!token) {
+      alert("❌ Không có access token. Vui lòng đăng nhập lại Google.");
+      return;
+    }
+
     const selectedImages = images.filter((img) => selected.has(img.id));
-    onSync(selectedImages);
+    try {
+      const res = await fetch("http://127.0.0.1:8000/api/drive/sync/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`, // ✅ Gửi token trong header
+        },
+        body: JSON.stringify({
+          images: selectedImages,
+          token, // ✅ Nếu backend cũng cần token trong body
+        }),
+      });
+
+      if (!res.ok) throw new Error("Lỗi khi gửi ảnh lên server.");
+      alert("✅ Đồng bộ thành công!");
+    } catch (err) {
+      console.error("❌ Lỗi đồng bộ:", err);
+      alert("Đồng bộ thất bại!");
+    }
   };
 
   return (
@@ -87,16 +113,10 @@ const GoogleDriveSync: React.FC<GoogleDriveSyncProps> = ({ onSync }) => {
         {images.map((img) => (
           <div
             key={img.id}
-            className={`border rounded p-1 cursor-pointer relative ${
-              selected.has(img.id) ? "ring-2 ring-blue-500" : ""
-            }`}
+            className={`border rounded p-1 cursor-pointer relative ${selected.has(img.id) ? "ring-2 ring-blue-500" : ""}`}
             onClick={() => toggleSelect(img.id)}
           >
-            <img
-              src={img.thumbnailLink}
-              alt={img.name}
-              className="w-full h-32 object-cover rounded"
-            />
+            <img src={img.thumbnailLink} alt={img.name} className="w-full h-32 object-cover rounded" />
             <div className="text-xs mt-1 text-center truncate">{img.name}</div>
           </div>
         ))}

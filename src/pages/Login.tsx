@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { login } from "../services/auth"; // Hàm login gọi API
+import { login } from "../services/auth";
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -14,21 +14,24 @@ const Login: React.FC = () => {
     setError("");
 
     try {
-      const data = await login(email, password); // Gọi API backend
+      const data = await login(email, password); // Gọi API đăng nhập
 
-      // Lưu token và tên người dùng (nếu có)
-      localStorage.setItem("token", data.token || "");
-      localStorage.setItem("username", data.user?.first_name || "Người dùng");
+      if (data?.token) {
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("username", data.user?.username || "Người dùng");
 
-      // Điều hướng về trang chủ
-      navigate("/");
-    } catch (err: unknown) {
-      console.error("Lỗi đăng nhập:", err);
-      if (err instanceof Error) {
-        setError(err.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại.");
+        console.log("✅ Đăng nhập thành công, token:", data.token);
+        navigate("/");
       } else {
-        setError("Đăng nhập thất bại. Vui lòng kiểm tra lại.");
+        setError("Không nhận được token từ server.");
       }
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        console.error("❌ Lỗi đăng nhập:", err.message);
+      } else {
+        console.error("❌ Lỗi đăng nhập:", err);
+      }
+      setError("Đăng nhập thất bại. Vui lòng kiểm tra lại.");
     }
   };
 
