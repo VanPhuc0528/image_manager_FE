@@ -16,22 +16,19 @@ const Login: React.FC = () => {
     try {
       const data = await login(email, password); // Gọi API đăng nhập
 
-      if (data?.token) {
-        localStorage.setItem("token", data.token);
-        localStorage.setItem("username", data.user?.username || "Người dùng");
+      // ✅ Lưu thông tin user đơn giản
+      localStorage.setItem("username", data.user?.username || email);
 
-        console.log("✅ Đăng nhập thành công, token:", data.token);
-        navigate("/");
-      } else {
-        setError("Không nhận được token từ server.");
-      }
+      console.log("✅ Đăng nhập thành công:", data.user);
+      navigate("/"); // Điều hướng sang trang chính
     } catch (err: unknown) {
       if (err instanceof Error) {
         console.error("❌ Lỗi đăng nhập:", err.message);
+        setError(err.message);
       } else {
         console.error("❌ Lỗi đăng nhập:", err);
+        setError("Đăng nhập thất bại. Vui lòng kiểm tra lại.");
       }
-      setError("Đăng nhập thất bại. Vui lòng kiểm tra lại.");
     }
   };
 

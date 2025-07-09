@@ -1,10 +1,9 @@
 import axios, { AxiosError } from "axios";
 
-// 👉 Đưa vào .env.production hoặc .env.development
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api";
 
 // =============================
-// ✅ Hàm đăng nhập (POST)
+// ✅ Hàm đăng nhập (KHÔNG cần token)
 // =============================
 export async function login(email: string, password: string) {
   try {
@@ -13,18 +12,13 @@ export async function login(email: string, password: string) {
       password,
     });
 
-    // ✅ Trích token và user từ data đúng cấp
-    const { token, user } = res.data.data;
+    // Trích xuất user từ kết quả trả về
+    const user = res.data?.user || res.data;
 
-    console.log("✅ Token nhận được:", token); // debug
-
-    return {
-      token,
-      user,
-    };
+    return { user };
   } catch (err: unknown) {
     const error = err as AxiosError<{ message?: string }>;
-    console.error("❌ Lỗi đăng nhập:", error.response?.data || error.message);
+    console.error("Lỗi đăng nhập:", error.response?.data || error.message);
     throw new Error(
       error.response?.data?.message || error.message || "Đăng nhập thất bại."
     );
@@ -32,17 +26,16 @@ export async function login(email: string, password: string) {
 }
 
 // =============================
-// ✅ Hàm đăng ký (POST)
+// ✅ Hàm đăng ký (giữ nguyên)
 // =============================
 export async function register(username: string, email: string, password: string) {
   try {
     const res = await axios.post(`${API_URL}/auth/register/`, {
-      username, // nếu backend yêu cầu dùng "name" hoặc "first_name" thì đổi lại
+      username,
       email,
       password,
     });
 
-    // Trường hợp backend chỉ trả thông báo
     return {
       message: "Đăng ký thành công!",
       user: res.data,
