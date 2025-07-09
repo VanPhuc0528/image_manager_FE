@@ -21,7 +21,7 @@ const GoogleDriveSync: React.FC = () => {
       const script = document.createElement("script");
       script.src = "https://apis.google.com/js/api.js";
       script.onload = () => {
-        window.gapi.load("client:auth2", initClient); // ✅ thêm auth2
+        window.gapi.load("client:auth2", initClient);
       };
       document.body.appendChild(script);
     };
@@ -37,17 +37,36 @@ const GoogleDriveSync: React.FC = () => {
         .then(() => {
           const authInstance = window.gapi.auth2.getAuthInstance();
           if (!authInstance.isSignedIn.get()) {
-            authInstance.signIn().then(() => {
-              const token = window.gapi.auth.getToken()?.access_token;
-              accessTokenRef.current = token || null;
-              fetchDriveImages();
-            });
+            authInstance.signIn().then(handleTokenAndImages);
           } else {
-            const token = window.gapi.auth.getToken()?.access_token;
-            accessTokenRef.current = token || null;
-            fetchDriveImages();
+            handleTokenAndImages();
           }
         });
+    };
+
+    const handleTokenAndImages = () => {
+      const token = window.gapi.auth.getToken()?.access_token;
+      if (token) {
+        accessTokenRef.current = token;
+        console.log("✅ Access Token:", token);
+
+        // Gửi token về backend
+        fetch("http://127.0.0.1:8000/api/save-token/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ token }),
+        })
+          .then((res) => {
+            if (!res.ok) throw new Error("Không thể gửi token về server.");
+            console.log("✅ Token đã gửi về server.");
+          })
+          .catch((err) => console.error("❌ Lỗi gửi token:", err));
+
+        fetchDriveImages();
+      }
     };
 
     loadGoogleApi();
@@ -85,16 +104,23 @@ const GoogleDriveSync: React.FC = () => {
     }
 
     const selectedImages = images.filter((img) => selected.has(img.id));
+
+    // ✅ Log JSON gửi đi để test/debug
+    console.log("🔥 Body gửi đi:", {
+      images: selectedImages,
+      token,
+    });
+
     try {
       const res = await fetch("http://127.0.0.1:8000/api/drive/sync/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`, // ✅ Gửi token trong header
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           images: selectedImages,
-          token, // ✅ Nếu backend cũng cần token trong body
+          token,
         }),
       });
 
@@ -113,10 +139,16 @@ const GoogleDriveSync: React.FC = () => {
         {images.map((img) => (
           <div
             key={img.id}
-            className={`border rounded p-1 cursor-pointer relative ${selected.has(img.id) ? "ring-2 ring-blue-500" : ""}`}
+            className={`border rounded p-1 cursor-pointer relative ${
+              selected.has(img.id) ? "ring-2 ring-blue-500" : ""
+            }`}
             onClick={() => toggleSelect(img.id)}
           >
-            <img src={img.thumbnailLink} alt={img.name} className="w-full h-32 object-cover rounded" />
+            <img
+              src={img.thumbnailLink}
+              alt={img.name}
+              className="w-full h-32 object-cover rounded"
+            />
             <div className="text-xs mt-1 text-center truncate">{img.name}</div>
           </div>
         ))}

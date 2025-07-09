@@ -87,7 +87,7 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchImages = async () => {
       try {
-        const res = await fetch("http://localhost:8000/images");
+        const res = await fetch("http://localhost:8000/api/images");
         const data: ImageItem[] = await res.json();
         setImages(data);
       } catch (err) {
@@ -102,11 +102,32 @@ const Dashboard: React.FC = () => {
   const handleSyncDrive = () => {
     if (!selectedFolderId || !selectedFolder?.allowSync || !window.google?.accounts?.oauth2) return;
 
+    if (accessTokenRef.current) {
+      console.log("🔁 Dùng lại Access Token cũ:", accessTokenRef.current);
+      showPicker(accessTokenRef.current);
+      return;
+    }
+
     const tokenClient = window.google.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID,
       scope: SCOPE,
       callback: (tokenResponse: { access_token: string }) => {
-        accessTokenRef.current = tokenResponse.access_token;
+        if (!accessTokenRef.current) {
+          accessTokenRef.current = tokenResponse.access_token;
+          console.log("📤 Gửi Access Token lần đầu:", tokenResponse.access_token);
+
+          fetch("http://localhost:8000/api/save-token/", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${tokenResponse.access_token}`,
+            },
+            body: JSON.stringify({ token: tokenResponse.access_token }),
+          })
+            .then(() => console.log("✅ Access Token đã gửi về backend"))
+            .catch((err) => console.error("❌ Lỗi gửi token:", err));
+        }
+
         showPicker(tokenResponse.access_token);
       },
     });
@@ -135,6 +156,11 @@ const Dashboard: React.FC = () => {
             createdAt: new Date().toISOString(),
           }));
 
+          console.log("🔥 Body gửi đi:", {
+            images: newImages,
+            token: accessToken,
+          });
+
           try {
             for (const img of newImages) {
               await fetch("http://localhost:8000/api/images/from-drive", {
@@ -148,7 +174,6 @@ const Dashboard: React.FC = () => {
             }
 
             setImages(prev => [...prev, ...newImages]);
-            console.log("✅ Access Token đã gửi:", accessToken);
           } catch (err) {
             setError("Không thể lưu ảnh từ Google Drive.");
             console.error("❌", err);
