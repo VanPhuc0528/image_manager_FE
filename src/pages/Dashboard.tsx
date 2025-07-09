@@ -158,7 +158,7 @@ const Dashboard: React.FC = () => {
 
           console.log("🔥 Body gửi đi:", {
             images: newImages,
-            token: accessToken,
+            token: "...",
           });
 
           try {
