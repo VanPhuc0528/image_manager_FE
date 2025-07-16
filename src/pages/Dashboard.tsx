@@ -52,14 +52,18 @@ const Dashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const accessTokenRef = useRef<string | null>(null);
 
-  const selectedFolder = folders.find(f => f.id === selectedFolderId);
-
-  // Hàm lấy userId từ localStorage
   const getCurrentUserId = (): number => {
-    const user = JSON.parse(localStorage.getItem("user") || "{}");
-    return user?.id || 1; // Fallback về 1 nếu không có userId
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      return user?.id || 1;
+    } catch {
+      return 1;
+    }
   };
 
+  const selectedFolder = folders.find(f => f.id === selectedFolderId);
+
+  // Load Google APIs for picker
   useEffect(() => {
     const loadApis = async () => {
       try {
@@ -91,17 +95,18 @@ const Dashboard: React.FC = () => {
     loadApis();
   }, []);
 
+  // Fetch images whenever selectedFolderId changes
   useEffect(() => {
     const fetchImages = async () => {
       try {
         const userId = getCurrentUserId();
-        const folderId = selectedFolderId || 1; // Nếu không có folder được chọn, dùng folder mặc định
-        
+        const folderId = selectedFolderId || 1;
+
         const url = `${API_URL}/${userId}/${folderId}/images`;
         const res = await fetch(url);
         if (!res.ok) throw new Error(`Server trả về lỗi: ${res.status}`);
-        const data: ImageItem[] = await res.json();
-        setImages(data);
+        const data = await res.json();
+        setImages(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Lỗi khi tải ảnh:", err);
         setError("Không thể tải ảnh từ server.");
@@ -111,100 +116,13 @@ const Dashboard: React.FC = () => {
     fetchImages();
   }, [selectedFolderId]);
 
-  const handleSyncDrive = () => {
-    if (!selectedFolderId || !selectedFolder?.allowSync || !window.google?.accounts?.oauth2) return;
-
-    if (accessTokenRef.current) {
-      showPicker(accessTokenRef.current);
-      return;
-    }
-
-    const tokenClient = window.google.accounts.oauth2.initTokenClient({
-      client_id: CLIENT_ID,
-      scope: SCOPE,
-      callback: (tokenResponse: { access_token: string }) => {
-        if (!accessTokenRef.current) {
-          accessTokenRef.current = tokenResponse.access_token;
-          console.log("📤 Gửi Access Token lần đầu:", tokenResponse.access_token);
-
-          const userId = getCurrentUserId();
-          fetch(`${API_URL}/${userId}/save-token/`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${tokenResponse.access_token}`,
-            },
-            body: JSON.stringify({ token: tokenResponse.access_token }),
-          })
-            .then(() => console.log("✅ Access Token đã gửi về backend"))
-            .catch((err) => console.error("❌ Lỗi gửi token:", err));
-        }
-
-        showPicker(tokenResponse.access_token);
-      },
-    });
-
-    tokenClient.requestAccessToken();
-  };
-
-  const showPicker = (accessToken: string) => {
-    const view = new window.google.picker.View(window.google.picker.ViewId.DOCS_IMAGES);
-    view.setMimeTypes("image/png,image/jpeg,image/jpg,image/gif");
-
-    const picker = new window.google.picker.PickerBuilder()
-      .enableFeature(window.google.picker.Feature.MULTISELECT_ENABLED)
-      .setAppId(CLIENT_ID.split("-")[0])
-      .setOAuthToken(accessToken)
-      .addView(view)
-      .addView(new window.google.picker.DocsUploadView())
-      .setDeveloperKey(DEVELOPER_KEY)
-      .setCallback(async (data: GooglePickerData) => {
-        if (data.action === window.google.picker.Action.PICKED && selectedFolderId !== null) {
-          const newImages: ImageItem[] = data.docs.map((file) => ({
-            id: file.id, // frontend tạm thời gán, backend sẽ override
-            name: file.name,
-            url: `https://drive.google.com/uc?export=view&id=${file.id}`,
-            folderId: selectedFolderId,
-            createdAt: new Date().toISOString(),
-          }));
-
-          try {
-            const user = JSON.parse(localStorage.getItem("user") || "{}");
-            const email = user?.email || "";
-            const userId = user?.id || getCurrentUserId();
-
-            await fetch(`${API_URL}/${userId}/${selectedFolderId}/images/from-drive`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${accessToken}`,
-              },
-              body: JSON.stringify({
-                images: newImages,
-                token: accessToken,
-                email,
-                user_id: userId,
-              }),
-            });
-
-            setImages(prev => [...prev, ...newImages]);
-          } catch {
-            setError("Không thể lưu ảnh từ Google Drive.");
-          }
-        }
-      })
-      .build();
-
-    picker.setVisible(true);
-  };
-
+  // Handle upload local files
   const handleUpload = async (files: FileList) => {
     if (!selectedFolder?.allowUpload || !selectedFolderId || files.length === 0) return;
 
     setLoading(true);
     try {
       const userId = getCurrentUserId();
-      
       const uploadPromises = Array.from(files).map(async (file) => {
         if (!file.type.startsWith("image/")) throw new Error(`File ${file.name} không hợp lệ`);
         if (file.size > 10 * 1024 * 1024) throw new Error(`File ${file.name} quá lớn`);
@@ -233,7 +151,7 @@ const Dashboard: React.FC = () => {
       });
 
       const newImages = await Promise.all(uploadPromises);
-      setImages(prev => [...prev, ...newImages]);
+      setImages(prev => (Array.isArray(prev) ? [...prev, ...newImages] : newImages));
     } catch (err: any) {
       setError(err.message || "Lỗi khi upload ảnh");
     } finally {
@@ -241,6 +159,91 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  // Handle sync Google Drive images via picker
+  const handleSyncDrive = () => {
+    if (!selectedFolderId || !selectedFolder?.allowSync || !window.google?.accounts?.oauth2) return;
+
+    if (accessTokenRef.current) {
+      showPicker(accessTokenRef.current);
+      return;
+    }
+
+    const tokenClient = window.google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPE,
+      callback: (tokenResponse: { access_token: string }) => {
+        accessTokenRef.current = tokenResponse.access_token;
+
+        const userId = getCurrentUserId();
+        fetch(`${API_URL}/${userId}/save-token/`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${tokenResponse.access_token}`,
+          },
+          body: JSON.stringify({ token: tokenResponse.access_token }),
+        }).catch((err) => console.error("❌ Lỗi gửi token:", err));
+
+        showPicker(tokenResponse.access_token);
+      },
+    });
+
+    tokenClient.requestAccessToken();
+  };
+
+  // Show Google picker dialog
+  const showPicker = (accessToken: string) => {
+    const view = new window.google.picker.View(window.google.picker.ViewId.DOCS_IMAGES);
+    view.setMimeTypes("image/png,image/jpeg,image/jpg,image/gif");
+
+    const picker = new window.google.picker.PickerBuilder()
+      .enableFeature(window.google.picker.Feature.MULTISELECT_ENABLED)
+      .setAppId(CLIENT_ID.split("-")[0])
+      .setOAuthToken(accessToken)
+      .addView(view)
+      .addView(new window.google.picker.DocsUploadView())
+      .setDeveloperKey(DEVELOPER_KEY)
+      .setCallback(async (data: GooglePickerData) => {
+        if (data.action === window.google.picker.Action.PICKED && selectedFolderId !== null) {
+          const newImages: ImageItem[] = data.docs.map((file) => ({
+            id: file.id,
+            name: file.name,
+            url: `https://drive.google.com/uc?export=view&id=${file.id}`,
+            folderId: selectedFolderId,
+            createdAt: new Date().toISOString(),
+          }));
+
+          try {
+            const user = JSON.parse(localStorage.getItem("user") || "{}");
+            const email = user?.email || "";
+            const userId = user?.id || getCurrentUserId();
+
+            await fetch(`${API_URL}/${userId}/${selectedFolderId}/images`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({
+                images: newImages,
+                token: accessToken,
+                email,
+                user_id: userId,
+              }),
+            });
+
+            setImages(prev => (Array.isArray(prev) ? [...prev, ...newImages] : newImages));
+          } catch {
+            setError("Không thể lưu ảnh từ Google Drive.");
+          }
+        }
+      })
+      .build();
+
+    picker.setVisible(true);
+  };
+
+  // Folder CRUD handlers
   const handleAddFolder = (parentId: number | null) => {
     const name = prompt("Tên thư mục:");
     if (!name) return;
@@ -266,12 +269,14 @@ const Dashboard: React.FC = () => {
     const deleteRecursively = (fid: number, list: Folder[]): Folder[] => {
       const children = list.filter(f => f.parentId === fid);
       let newList = list.filter(f => f.id !== fid);
-      for (const c of children) newList = deleteRecursively(c.id, newList);
+      for (const c of children) {
+        newList = deleteRecursively(c.id, newList);
+      }
       return newList;
     };
 
     setFolders(prev => deleteRecursively(id, prev));
-    setImages(prev => prev.filter(img => img.folderId !== id));
+    setImages(prev => (Array.isArray(prev) ? prev.filter(img => img.folderId !== id) : []));
   };
 
   return (
@@ -305,7 +310,7 @@ const Dashboard: React.FC = () => {
           images={images}
           onSyncDrive={handleSyncDrive}
           onSelectFolder={(id) => navigate(`/folder/${id}`)}
-          onUploaded={(newImgs) => setImages(prev => [...prev, ...newImgs])}
+          onUploaded={(newImgs) => setImages(prev => (Array.isArray(prev) ? [...prev, ...newImgs] : newImgs))}
           onUpload={handleUpload}
         />
       </div>
