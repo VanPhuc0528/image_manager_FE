@@ -38,32 +38,56 @@ declare global {
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const selectedFolderId = id ? parseInt(id) : null;
 
-  const [folders, setFolders] = useState<Folder[]>([
-    { id: 1, name: "Ảnh cá nhân", parentId: null, allowUpload: true, allowSync: true },
-    { id: 2, name: "Ảnh sự kiện", parentId: 1, allowUpload: true, allowSync: false },
-    { id: 3, name: "Ảnh học tập", parentId: 1, allowUpload: false, allowSync: true },
-    { id: 4, name: "Thư mục chia sẻ", parentId: null, allowUpload: true, allowSync: true },
-  ]);
-
+  const [folders, setFolders] = useState<Folder[]>([]);
   const [images, setImages] = useState<ImageItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const accessTokenRef = useRef<string | null>(null);
 
+  // Lấy userId từ localStorage
   const getCurrentUserId = (): number => {
     try {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
-      return user?.id || 1;
+      return user?.id;
     } catch {
       return 1;
     }
   };
 
-  const selectedFolder = folders.find(f => f.id === selectedFolderId);
+  // Chọn folderId ưu tiên:
+  // Nếu url có id thì lấy id đó,
+  // nếu chưa có thì lấy folder đầu tiên trong list,
+  // nếu folder trống thì null
+  const selectedFolderId = id
+    ? parseInt(id)
+    : folders.length > 0
+    ? folders[0].id
+    : null;
 
-  // Load Google APIs for picker
+  // Lấy folder đang chọn để dùng trong UI
+  const selectedFolder = folders.find((f) => f.id === selectedFolderId);
+
+  // Load danh sách folder từ server khi mount
+  useEffect(() => {
+    const fetchFolders = async () => {
+      try {
+        const userId = getCurrentUserId();
+        const response = await fetch(`${API_URL}/folders?user_id=${userId}`);
+        if (!response.ok) throw new Error("Lỗi tải thư mục");
+
+        const data = await response.json();
+        setFolders(data);
+      } catch {
+        console.log("Lỗi khi tải thư mục:", error)
+        setError("Không thể tải thư mục");
+      }
+    };
+
+    fetchFolders();
+  }, []);
+
+  // Load Google APIs cho picker
   useEffect(() => {
     const loadApis = async () => {
       try {
@@ -95,19 +119,23 @@ const Dashboard: React.FC = () => {
     loadApis();
   }, []);
 
-  // Fetch images whenever selectedFolderId changes
+  // Fetch ảnh mỗi khi selectedFolderId hoặc folders thay đổi
   useEffect(() => {
     const fetchImages = async () => {
+      if (!selectedFolderId) {
+        setImages([]);
+        return;
+      }
       try {
         const userId = getCurrentUserId();
-        const folderId = selectedFolderId || 1; //folder mặc định
-
-        const url = `${API_URL}/${userId}/${folderId}/images`;
-        console.log("Fectching images from URL:", url);
+        const url = `${API_URL}/${userId}/${selectedFolderId}/images`;
+        console.log("Fetching images from URL:", url);
 
         const res = await fetch(url);
         if (!res.ok) throw new Error(`Server trả về lỗi: ${res.status}`);
+
         const data = await res.json();
+        console.log("Response data:", data);
         setImages(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Lỗi khi tải ảnh:", err);
@@ -116,9 +144,10 @@ const Dashboard: React.FC = () => {
     };
 
     fetchImages();
-  }, [selectedFolderId]);
+  }, [selectedFolderId, folders]);
 
-  // Handle upload local files
+  // Phần còn lại giữ nguyên
+
   const handleUpload = async (files: FileList) => {
     if (!selectedFolder?.allowUpload || !selectedFolderId || files.length === 0) return;
 
@@ -153,7 +182,7 @@ const Dashboard: React.FC = () => {
       });
 
       const newImages = await Promise.all(uploadPromises);
-      setImages(prev => (Array.isArray(prev) ? [...prev, ...newImages] : newImages));
+      setImages((prev) => (Array.isArray(prev) ? [...prev, ...newImages] : newImages));
     } catch (err: any) {
       setError(err.message || "Lỗi khi upload ảnh");
     } finally {
@@ -161,7 +190,6 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // Handle sync Google Drive images via picker
   const handleSyncDrive = () => {
     if (!selectedFolderId || !selectedFolder?.allowSync || !window.google?.accounts?.oauth2) return;
 
@@ -193,7 +221,6 @@ const Dashboard: React.FC = () => {
     tokenClient.requestAccessToken();
   };
 
-  // Show Google picker dialog
   const showPicker = (accessToken: string) => {
     const view = new window.google.picker.View(window.google.picker.ViewId.DOCS_IMAGES);
     view.setMimeTypes("image/png,image/jpeg,image/jpg,image/gif");
@@ -220,7 +247,7 @@ const Dashboard: React.FC = () => {
             const email = user?.email || "";
             const userId = user?.id || getCurrentUserId();
 
-            console.log("${API_URL}/${userId}/${selectedFolderId}/images")
+            console.log(`${API_URL}/${userId}/${selectedFolderId}/images`);
 
             await fetch(`${API_URL}/${userId}/${selectedFolderId}/images`, {
               method: "POST",
@@ -236,7 +263,7 @@ const Dashboard: React.FC = () => {
               }),
             });
 
-            setImages(prev => (Array.isArray(prev) ? [...prev, ...newImages] : newImages));
+            setImages((prev) => (Array.isArray(prev) ? [...prev, ...newImages] : newImages));
           } catch {
             setError("Không thể lưu ảnh từ Google Drive.");
           }
@@ -247,11 +274,12 @@ const Dashboard: React.FC = () => {
     picker.setVisible(true);
   };
 
-  // Folder CRUD handlers
+  // Folder CRUD handlers giữ nguyên
+
   const handleAddFolder = (parentId: number | null) => {
     const name = prompt("Tên thư mục:");
     if (!name) return;
-    setFolders(prev => [
+    setFolders((prev) => [
       ...prev,
       {
         id: Date.now(),
@@ -264,23 +292,23 @@ const Dashboard: React.FC = () => {
   };
 
   const handleUpdateFolder = (updated: Folder) => {
-    setFolders(prev => prev.map(f => (f.id === updated.id ? updated : f)));
+    setFolders((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
   };
 
   const handleDeleteFolder = (id: number) => {
     if (!confirm("Xoá thư mục và toàn bộ ảnh?")) return;
 
     const deleteRecursively = (fid: number, list: Folder[]): Folder[] => {
-      const children = list.filter(f => f.parentId === fid);
-      let newList = list.filter(f => f.id !== fid);
+      const children = list.filter((f) => f.parentId === fid);
+      let newList = list.filter((f) => f.id !== fid);
       for (const c of children) {
         newList = deleteRecursively(c.id, newList);
       }
       return newList;
     };
 
-    setFolders(prev => deleteRecursively(id, prev));
-    setImages(prev => (Array.isArray(prev) ? prev.filter(img => img.folderId !== id) : []));
+    setFolders((prev) => deleteRecursively(id, prev));
+    setImages((prev) => (Array.isArray(prev) ? prev.filter((img) => img.folderId !== id) : []));
   };
 
   return (
@@ -314,7 +342,7 @@ const Dashboard: React.FC = () => {
           images={images}
           onSyncDrive={handleSyncDrive}
           onSelectFolder={(id) => navigate(`/folder/${id}`)}
-          onUploaded={(newImgs) => setImages(prev => (Array.isArray(prev) ? [...prev, ...newImgs] : newImgs))}
+          onUploaded={(newImgs) => setImages((prev) => (Array.isArray(prev) ? [...prev, ...newImgs] : newImgs))}
           onUpload={handleUpload}
         />
       </div>

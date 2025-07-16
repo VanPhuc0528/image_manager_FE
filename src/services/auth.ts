@@ -8,12 +8,18 @@ const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api";
 export async function login(email: string, password: string) {
   try {
     const res = await axios.post(`${API_URL}/auth/login/`, {
-      username: email,
+      email,
       password,
     });
+    console.log("🔎 login response:", res.data);
 
-    // Trích xuất user từ kết quả trả về
-    const user = res.data?.user || res.data;
+    // 👇 Lấy user từ trường `data` (theo đúng format backend trả về)
+    const user = res.data?.data || res.data?.user || res.data;
+    console.log("🔎 parsed user:", user);
+
+    if (!user?.id) {
+      throw new Error("Không tìm thấy thông tin người dùng.");
+    }
 
     return { user };
   } catch (err: unknown) {
@@ -24,6 +30,7 @@ export async function login(email: string, password: string) {
     );
   }
 }
+
 
 // =============================
 // ✅ Hàm đăng ký (giữ nguyên)

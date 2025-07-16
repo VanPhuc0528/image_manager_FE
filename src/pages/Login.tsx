@@ -15,11 +15,14 @@ const Login: React.FC = () => {
 
     try {
       const data = await login(email, password); // Gọi API đăng nhập
+      const user = data?.user;
 
-      // ✅ Lưu thông tin user đơn giản
-      localStorage.setItem("username", data.user?.username || email);
+      // ✅ Lưu toàn bộ user (bao gồm id, email, username) vào localStorage
+      if (user?.id) {
+        localStorage.setItem("user", JSON.stringify(user));
+      }
 
-      console.log("✅ Đăng nhập thành công:", data.user);
+      console.log("✅ Đăng nhập thành công:", user);
       navigate("/"); // Điều hướng sang trang chính
     } catch (err: unknown) {
       if (err instanceof Error) {

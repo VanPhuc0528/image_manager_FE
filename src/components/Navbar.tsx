@@ -1,20 +1,20 @@
 import React, { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 
 const Navbar: React.FC = () => {
   const [username, setUsername] = useState<string | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
+    // Mỗi lần đường dẫn thay đổi (login/logout...) thì lấy lại username từ localStorage
     const storedName = localStorage.getItem("username");
-    if (storedName) {
-      setUsername(storedName);
-    }
-  }, []);
+    setUsername(storedName);
+  }, [location.pathname]); // chạy mỗi khi đường dẫn thay đổi
 
   const handleLogout = () => {
     localStorage.removeItem("username");
-    // Nếu bạn lưu token thì cũng remove ở đây
+    setUsername(null);
     navigate("/login");
   };
 
