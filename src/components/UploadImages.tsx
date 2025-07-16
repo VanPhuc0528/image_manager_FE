@@ -14,39 +14,53 @@ const UploadImages: React.FC<Props> = ({ folderId, disabled, onUploaded }) => {
     const files = e.target.files;
     if (!files || !folderId) return;
 
-    const now = new Date();
+    const uploadPromises = Array.from(files).map(async (file) => {
+      if (!file.type.startsWith("image/")) {
+        alert("Không phải ảnh hợp lệ");
+        return null;
+      }
 
-    const uploadPromises = Array.from(files).map(async (file, idx) => {
-      if (!file.type.startsWith("image/")) throw new Error("Không phải ảnh hợp lệ");
-      if (file.size > 10 * 1024 * 1024) throw new Error("Ảnh quá lớn");
+      if (file.size > 10 * 1024 * 1024) {
+        alert("Ảnh quá lớn (tối đa 10MB)");
+        return null;
+      }
 
-      // 🛠 Với json-server, không dùng formData, mà dùng JSON
-      const mockData: ImageItem = {
-        id: Date.now() + idx,
-        name: file.name,
-        url: URL.createObjectURL(file),
-        folderId,
-        createdAt: now.toISOString(),
-      };
 
+      // test 
+      const user_id = 1;
+      const folderId = 1;
+
+      const formData = new FormData();
+      formData.append("img_file", file);
+      formData.append("folder_id", folderId.toString());
+      formData.append("img_name", file.name); // Optional
+      formData.append("user_id", user_id.toString()); // Optional
+
+
+
+      console.log("formData:", formData);
       try {
-        const res = await fetch("http://localhost:8000/images", {
+        const res = await fetch("http://localhost:8000/api/upload/img/", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(mockData),
+          body: formData,
         });
 
-        const result = await res.json();
+
+        if (!res.ok) {
+          const error = await res.text();
+          console.error("Lỗi từ server:", error);
+          return null;
+        }
+
+        const result: ImageItem = await res.json();
         return result;
-      } catch {
-        // Nếu fetch lỗi (json-server chưa bật) → dùng mock tạm
-        return mockData;
+      } catch (err) {
+        console.error("Upload thất bại:", err);
+        return null;
       }
     });
 
-    const newImages = await Promise.all(uploadPromises);
+    const newImages = (await Promise.all(uploadPromises)).filter(Boolean) as ImageItem[];
     onUploaded(newImages);
   };
 

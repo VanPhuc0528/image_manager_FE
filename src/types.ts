@@ -1,5 +1,5 @@
 export interface ImageItem{
-    id: number;
+    id: string;
     name: string;
     url: string;
     folderId: number;

@@ -23,7 +23,7 @@ const Navbar: React.FC = () => {
       <Link to="/" className="text-xl font-bold">📸 Image Manager</Link>
       <div className="space-x-4 flex items-center">
         <Link to="/" className="hover:text-blue-400">Trang chủ</Link>
-        <Link to="/shared" className="hover:text-blue-400">Được chia sẻ</Link>
+        <Link to="/login-google" className="hover:text-blue-400">Đăng nhập Google</Link>
 
         {username ? (
           <>

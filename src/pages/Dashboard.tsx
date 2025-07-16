@@ -5,9 +5,10 @@ import FolderConfig from "../components/FolderConfig";
 import { useNavigate, useParams } from "react-router-dom";
 import type { ImageItem } from "../types";
 
-const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "1070318039881-53p11ea9cvllv03g594jg28t7br02kgv.apps.googleusercontent.com";
-const DEVELOPER_KEY = import.meta.env.VITE_GOOGLE_DEVELOPER_KEY || "AIzaSyAqWGu8sO8GBBHZYjZ9tvdAjBD4JRptrYs";
+const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const DEVELOPER_KEY = import.meta.env.VITE_GOOGLE_DEVELOPER_KEY;
 const SCOPE = "https://www.googleapis.com/auth/drive.readonly";
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api";
 
 interface Folder {
   id: number;
@@ -53,6 +54,12 @@ const Dashboard: React.FC = () => {
 
   const selectedFolder = folders.find(f => f.id === selectedFolderId);
 
+  // Hàm lấy userId từ localStorage
+  const getCurrentUserId = (): number => {
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    return user?.id || 1; // Fallback về 1 nếu không có userId
+  };
+
   useEffect(() => {
     const loadApis = async () => {
       try {
@@ -87,7 +94,12 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchImages = async () => {
       try {
-        const res = await fetch("http://localhost:8000/api/images");
+        const userId = getCurrentUserId();
+        const folderId = selectedFolderId || 1; // Nếu không có folder được chọn, dùng folder mặc định
+        
+        const url = `${API_URL}/${userId}/${folderId}/images`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Server trả về lỗi: ${res.status}`);
         const data: ImageItem[] = await res.json();
         setImages(data);
       } catch (err) {
@@ -97,13 +109,12 @@ const Dashboard: React.FC = () => {
     };
 
     fetchImages();
-  }, []);
+  }, [selectedFolderId]);
 
   const handleSyncDrive = () => {
     if (!selectedFolderId || !selectedFolder?.allowSync || !window.google?.accounts?.oauth2) return;
 
     if (accessTokenRef.current) {
-      console.log("🔁 Dùng lại Access Token cũ:", accessTokenRef.current);
       showPicker(accessTokenRef.current);
       return;
     }
@@ -116,7 +127,8 @@ const Dashboard: React.FC = () => {
           accessTokenRef.current = tokenResponse.access_token;
           console.log("📤 Gửi Access Token lần đầu:", tokenResponse.access_token);
 
-          fetch("http://localhost:8000/api/save-token/", {
+          const userId = getCurrentUserId();
+          fetch(`${API_URL}/${userId}/save-token/`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -148,35 +160,36 @@ const Dashboard: React.FC = () => {
       .setDeveloperKey(DEVELOPER_KEY)
       .setCallback(async (data: GooglePickerData) => {
         if (data.action === window.google.picker.Action.PICKED && selectedFolderId !== null) {
-          const newImages: ImageItem[] = data.docs.map((file, idx) => ({
-            id: Date.now() + idx,
+          const newImages: ImageItem[] = data.docs.map((file) => ({
+            id: file.id, // frontend tạm thời gán, backend sẽ override
             name: file.name,
             url: `https://drive.google.com/uc?export=view&id=${file.id}`,
             folderId: selectedFolderId,
             createdAt: new Date().toISOString(),
           }));
 
-          console.log("🔥 Body gửi đi:", {
-            images: newImages,
-            token: accessToken,
-          });
-
           try {
-            for (const img of newImages) {
-              await fetch("http://localhost:8000/api/images/from-drive", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${accessToken}`,
-                },
-                body: JSON.stringify(img),
-              });
-            }
+            const user = JSON.parse(localStorage.getItem("user") || "{}");
+            const email = user?.email || "";
+            const userId = user?.id || getCurrentUserId();
+
+            await fetch(`${API_URL}/${userId}/${selectedFolderId}/images/from-drive`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({
+                images: newImages,
+                token: accessToken,
+                email,
+                user_id: userId,
+              }),
+            });
 
             setImages(prev => [...prev, ...newImages]);
-          } catch (err) {
+          } catch {
             setError("Không thể lưu ảnh từ Google Drive.");
-            console.error("❌", err);
           }
         }
       })
@@ -190,27 +203,32 @@ const Dashboard: React.FC = () => {
 
     setLoading(true);
     try {
-      const uploadPromises = Array.from(files).map(async (file, idx) => {
+      const userId = getCurrentUserId();
+      
+      const uploadPromises = Array.from(files).map(async (file) => {
         if (!file.type.startsWith("image/")) throw new Error(`File ${file.name} không hợp lệ`);
         if (file.size > 10 * 1024 * 1024) throw new Error(`File ${file.name} quá lớn`);
 
         const formData = new FormData();
         formData.append("image", file);
         formData.append("folderId", selectedFolderId.toString());
+        formData.append("createdAt", new Date().toISOString());
 
-        const res = await fetch("http://localhost:8000/api/images/upload", {
+        const res = await fetch(`${API_URL}/${userId}/${selectedFolderId}/images/`, {
           method: "POST",
           body: formData,
         });
 
+        if (!res.ok) throw new Error("Upload thất bại");
+
         const result = await res.json();
 
         return {
-          id: Date.now() + idx,
-          name: result.name || file.name,
+          id: result.id,
+          name: result.name,
           url: result.url,
           folderId: selectedFolderId,
-          createdAt: new Date().toISOString(),
+          createdAt: result.created_at,
         };
       });
 

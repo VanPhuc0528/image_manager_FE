@@ -37,7 +37,7 @@ const GoogleDriveSync: React.FC = () => {
         .then(() => {
           const authInstance = window.gapi.auth2.getAuthInstance();
           if (!authInstance.isSignedIn.get()) {
-            authInstance.signIn().then(handleTokenAndImages);
+            authInstance.signIn().then(() => handleTokenAndImages());
           } else {
             handleTokenAndImages();
           }
@@ -45,12 +45,15 @@ const GoogleDriveSync: React.FC = () => {
     };
 
     const handleTokenAndImages = () => {
-      const token = window.gapi.auth.getToken()?.access_token;
+      const authInstance = window.gapi.auth2.getAuthInstance();
+      const currentUser = authInstance.currentUser.get();
+      const authResponse = currentUser.getAuthResponse();
+      const token = authResponse?.access_token;
+
       if (token) {
         accessTokenRef.current = token;
         console.log("✅ Access Token:", token);
 
-        // Gửi token về backend
         fetch("http://127.0.0.1:8000/api/save-token/", {
           method: "POST",
           headers: {
@@ -66,6 +69,8 @@ const GoogleDriveSync: React.FC = () => {
           .catch((err) => console.error("❌ Lỗi gửi token:", err));
 
         fetchDriveImages();
+      } else {
+        console.warn("⚠️ Không thể lấy được access token.");
       }
     };
 
@@ -105,7 +110,6 @@ const GoogleDriveSync: React.FC = () => {
 
     const selectedImages = images.filter((img) => selected.has(img.id));
 
-    // ✅ Log JSON gửi đi để test/debug
     console.log("🔥 Body gửi đi:", {
       images: selectedImages,
       token,
