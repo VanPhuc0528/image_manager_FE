@@ -100,9 +100,11 @@ const Dashboard: React.FC = () => {
     const fetchImages = async () => {
       try {
         const userId = getCurrentUserId();
-        const folderId = selectedFolderId || 1;
+        const folderId = selectedFolderId || 1; //folder mặc định
 
         const url = `${API_URL}/${userId}/${folderId}/images`;
+        console.log("Fectching images from URL:", url);
+
         const res = await fetch(url);
         if (!res.ok) throw new Error(`Server trả về lỗi: ${res.status}`);
         const data = await res.json();
@@ -217,6 +219,8 @@ const Dashboard: React.FC = () => {
             const user = JSON.parse(localStorage.getItem("user") || "{}");
             const email = user?.email || "";
             const userId = user?.id || getCurrentUserId();
+
+            console.log("${API_URL}/${userId}/${selectedFolderId}/images")
 
             await fetch(`${API_URL}/${userId}/${selectedFolderId}/images`, {
               method: "POST",
