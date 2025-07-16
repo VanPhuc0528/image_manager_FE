@@ -13,7 +13,7 @@ interface Folder {
 interface ImageGridProps {
   folderId: number | null;
   folders: Folder[];
-  images: ImageItem[];
+  images: ImageItem[] | null | undefined;
   onSyncDrive: () => void;
   onSelectFolder: (id: number | null) => void;
   onUploaded: (newImgs: ImageItem[]) => void;
@@ -36,9 +36,12 @@ const ImageGrid: React.FC<ImageGridProps> = ({
 
   const currentFolder = folders.find((f) => f.id === folderId);
 
+  // An toàn: kiểm tra images là mảng
+  const safeImages = Array.isArray(images) ? images : [];
+
   // Lọc ảnh theo folderId
   let currentImages = folderId
-    ? images.filter((img) => img.folderId === folderId)
+    ? safeImages.filter((img) => img.folderId === folderId)
     : [];
 
   // Áp dụng lọc theo ngày/tháng/năm
