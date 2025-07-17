@@ -73,13 +73,23 @@ const Dashboard: React.FC = () => {
     const fetchFolders = async () => {
       try {
         const userId = getCurrentUserId();
-        const response = await fetch(`${API_URL}/folders?user_id=${userId}`);
+        const response = await fetch(`${API_URL}/home/${userId}`);
         if (!response.ok) throw new Error("Lỗi tải thư mục");
 
         const data = await response.json();
-        setFolders(data);
-      } catch {
-        console.log("Lỗi khi tải thư mục:", error)
+        console.log("data", data);
+
+        const normalizedFolders: Folder[] = data.folders.map((f: any) => ({
+          id: f.id,
+          name: f.name,
+          parentId: f.parentId ?? null,
+          allowUpload: true,   
+          allowSync: true,
+        }));
+
+        setFolders(normalizedFolders);
+      } catch (err) {
+        console.log("Lỗi khi tải thư mục:", err);
         setError("Không thể tải thư mục");
       }
     };
@@ -276,20 +286,45 @@ const Dashboard: React.FC = () => {
 
   // Folder CRUD handlers giữ nguyên
 
-  const handleAddFolder = (parentId: number | null) => {
+    const handleAddFolder = async (parentId: number | null) => {
     const name = prompt("Tên thư mục:");
     if (!name) return;
-    setFolders((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        name: name.trim(),
-        parentId,
-        allowUpload: true,
-        allowSync: true,
-      },
-    ]);
+
+    const userId = getCurrentUserId();
+
+    try {
+      const response = await fetch(`${API_URL}/folder/create/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: name.trim(),
+          parentId: parentId ?? null,
+          owner: userId,
+        }),
+      });
+
+      if (!response.ok) throw new Error("Lỗi khi tạo thư mục");
+
+      const newFolder = await response.json();
+
+      setFolders((prev) => [
+        ...prev,
+        {
+          id: newFolder.id,
+          name: newFolder.name,
+          parentId: newFolder.parentId ?? null,
+          allowUpload: true,
+          allowSync: true,
+        },
+      ]);
+    } catch (err) {
+      console.error("❌ Lỗi khi tạo thư mục:", err);
+      alert("Không thể tạo thư mục. Vui lòng thử lại.");
+    }
   };
+
 
   const handleUpdateFolder = (updated: Folder) => {
     setFolders((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));

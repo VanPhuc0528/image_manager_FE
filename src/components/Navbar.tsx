@@ -1,17 +1,24 @@
 import React, { useEffect, useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate} from "react-router-dom";
 
 const Navbar: React.FC = () => {
   const [username, setUsername] = useState<string | null>(null);
   const navigate = useNavigate();
-  const location = useLocation();
 
-  useEffect(() => {
-    // Mỗi lần đường dẫn thay đổi (login/logout...) thì lấy lại username từ localStorage
-    const storedName = localStorage.getItem("username");
-    setUsername(storedName);
-  }, [location.pathname]); // chạy mỗi khi đường dẫn thay đổi
 
+    useEffect(() => {
+    const userJson = localStorage.getItem("user");
+    if (userJson) {
+      try {
+        const user = JSON.parse(userJson);
+        setUsername(user.username); // ✅ lấy đúng username
+      } catch (e) {
+        console.error("Không thể parse user từ localStorage", e);
+      }
+    } else {
+      setUsername(null);
+    }
+  }, []);
   const handleLogout = () => {
     localStorage.removeItem("username");
     setUsername(null);
