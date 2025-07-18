@@ -7,7 +7,7 @@ import type { ImageItem } from "../types";
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const DEVELOPER_KEY = import.meta.env.VITE_GOOGLE_DEVELOPER_KEY;
-const SCOPE = "https://www.googleapis.com/auth/drive.readonly";
+const SCOPE = "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email";
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api";
 
 interface Folder {
@@ -45,59 +45,63 @@ const Dashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const accessTokenRef = useRef<string | null>(null);
 
-  // Lấy userId từ localStorage
   const getCurrentUserId = (): number => {
     try {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
-      return user?.id;
+      return user?.id || 1;
     } catch {
       return 1;
     }
   };
 
-  // Chọn folderId ưu tiên:
-  // Nếu url có id thì lấy id đó,
-  // nếu chưa có thì lấy folder đầu tiên trong list,
-  // nếu folder trống thì null
-  const selectedFolderId = id
-    ? parseInt(id)
-    : folders.length > 0
-    ? folders[0].id
-    : null;
-
-  // Lấy folder đang chọn để dùng trong UI
+  const selectedFolderId = id ? parseInt(id) : folders.length > 0 ? folders[0].id : null;
   const selectedFolder = folders.find((f) => f.id === selectedFolderId);
 
-  // Load danh sách folder từ server khi mount
   useEffect(() => {
     const fetchFolders = async () => {
       try {
         const userId = getCurrentUserId();
         const response = await fetch(`${API_URL}/home/${userId}`);
         if (!response.ok) throw new Error("Lỗi tải thư mục");
-
         const data = await response.json();
-        console.log("data", data);
 
-        const normalizedFolders: Folder[] = data.folders.map((f: any) => ({
+        const normalized: Folder[] = data.folders.map((f: any) => ({
           id: f.id,
           name: f.name,
           parentId: f.parentId ?? null,
-          allowUpload: true,   
+          allowUpload: true,
           allowSync: true,
         }));
 
-        setFolders(normalizedFolders);
+        setFolders(normalized);
       } catch (err) {
-        console.log("Lỗi khi tải thư mục:", err);
-        setError("Không thể tải thư mục");
+        setError("Không thể tải thư mục.");
       }
     };
 
     fetchFolders();
   }, []);
 
-  // Load Google APIs cho picker
+  useEffect(() => {
+    const fetchImages = async () => {
+      if (!selectedFolderId) {
+        setImages([]);
+        return;
+      }
+      try {
+        const userId = getCurrentUserId();
+        const res = await fetch(`${API_URL}/${userId}/${selectedFolderId}/images`);
+        if (!res.ok) throw new Error("Lỗi khi tải ảnh từ server");
+        const data = await res.json();
+        setImages(data.images || []);
+      } catch (err) {
+        setError("Không thể tải ảnh từ server.");
+      }
+    };
+
+    fetchImages();
+  }, [selectedFolderId, folders]);
+
   useEffect(() => {
     const loadApis = async () => {
       try {
@@ -122,45 +126,15 @@ const Dashboard: React.FC = () => {
           onerror: () => setError("Không thể tải Google Picker API."),
         });
       } catch {
-        setError("Không thể tải Google APIs");
+        setError("Không thể tải Google APIs.");
       }
     };
 
     loadApis();
   }, []);
 
-  // Fetch ảnh mỗi khi selectedFolderId hoặc folders thay đổi
-  useEffect(() => {
-    const fetchImages = async () => {
-      if (!selectedFolderId) {
-        setImages([]);
-        return;
-      }
-      try {
-        const userId = getCurrentUserId();
-        const url = `${API_URL}/${userId}/${selectedFolderId}/images`;
-        console.log("Fetching images from URL:", url);
-
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`Server trả về lỗi: ${res.status}`);
-
-        const data = await res.json();
-        console.log("Response data:", data);
-        setImages(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error("Lỗi khi tải ảnh:", err);
-        setError("Không thể tải ảnh từ server.");
-      }
-    };
-
-    fetchImages();
-  }, [selectedFolderId, folders]);
-
-  // Phần còn lại giữ nguyên
-
   const handleUpload = async (files: FileList) => {
     if (!selectedFolder?.allowUpload || !selectedFolderId || files.length === 0) return;
-
     setLoading(true);
     try {
       const userId = getCurrentUserId();
@@ -179,20 +153,19 @@ const Dashboard: React.FC = () => {
         });
 
         if (!res.ok) throw new Error("Upload thất bại");
-
         const result = await res.json();
 
         return {
           id: result.id,
-          name: result.name,
-          url: result.url,
-          folderId: selectedFolderId,
-          createdAt: result.created_at,
+          image_name: result.name,
+          image: result.url,
+          folder_id: selectedFolderId,
+          created_at: result.created_at,
         };
       });
 
       const newImages = await Promise.all(uploadPromises);
-      setImages((prev) => (Array.isArray(prev) ? [...prev, ...newImages] : newImages));
+      setImages((prev) => [...prev, ...newImages]);
     } catch (err: any) {
       setError(err.message || "Lỗi khi upload ảnh");
     } finally {
@@ -203,35 +176,42 @@ const Dashboard: React.FC = () => {
   const handleSyncDrive = () => {
     if (!selectedFolderId || !selectedFolder?.allowSync || !window.google?.accounts?.oauth2) return;
 
-    if (accessTokenRef.current) {
-      showPicker(accessTokenRef.current);
-      return;
-    }
-
     const tokenClient = window.google.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID,
       scope: SCOPE,
-      callback: (tokenResponse: { access_token: string }) => {
-        accessTokenRef.current = tokenResponse.access_token;
+      callback: async (tokenResponse: { access_token: string }) => {
+        const accessToken = tokenResponse.access_token;
+        accessTokenRef.current = accessToken;
 
-        const userId = getCurrentUserId();
-        fetch(`${API_URL}/${userId}/save-token/`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${tokenResponse.access_token}`,
-          },
-          body: JSON.stringify({ token: tokenResponse.access_token }),
-        }).catch((err) => console.error("❌ Lỗi gửi token:", err));
+        try {
+          const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
 
-        showPicker(tokenResponse.access_token);
+          const userInfo = await userInfoRes.json();
+          const driveEmail = userInfo.email;
+
+          const userId = getCurrentUserId();
+          await fetch(`${API_URL}/${userId}/save_drive_token/`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({ token: accessToken }),
+          });
+
+          showPicker(accessToken, driveEmail);
+        } catch (err) {
+          setError("Không thể lấy thông tin người dùng Google.");
+        }
       },
     });
 
     tokenClient.requestAccessToken();
   };
 
-  const showPicker = (accessToken: string) => {
+  const showPicker = (accessToken: string, driveEmail: string) => {
     const view = new window.google.picker.View(window.google.picker.ViewId.DOCS_IMAGES);
     view.setMimeTypes("image/png,image/jpeg,image/jpg,image/gif");
 
@@ -244,39 +224,49 @@ const Dashboard: React.FC = () => {
       .setDeveloperKey(DEVELOPER_KEY)
       .setCallback(async (data: GooglePickerData) => {
         if (data.action === window.google.picker.Action.PICKED && selectedFolderId !== null) {
-          const newImages: ImageItem[] = data.docs.map((file) => ({
-            id: file.id,
-            name: file.name,
-            url: `https://drive.google.com/uc?export=view&id=${file.id}`,
-            folderId: selectedFolderId,
-            createdAt: new Date().toISOString(),
-          }));
+          const newImages: ImageItem[] = [];
 
-          try {
-            const user = JSON.parse(localStorage.getItem("user") || "{}");
-            const email = user?.email || "";
-            const userId = user?.id || getCurrentUserId();
+          for (const file of data.docs) {
+            const newImg: ImageItem = {
+              id: file.id,
+              image_name: file.name,
+              image: `https://drive.google.com/uc?export=view&id=${file.id}`,
+              folder_id: selectedFolderId,
+              created_at: new Date().toISOString(),
+            };
+                const body =JSON.stringify({
+                  user_id: getCurrentUserId(),
+                  drive_email: driveEmail,
+                  img_name: file.name,
+                  img_id: file.id,
+                  img_folder_id: selectedFolderId,
+                })
+                console.log("body:", body)
+            try {
+              const userId = getCurrentUserId();
+              await fetch(`${API_URL}/sync/img/`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${accessToken}`,
+                },
+                body: JSON.stringify({
+                  user_id: userId,
+                  drive_email: driveEmail,
+                  img_name: file.name,
+                  img_id: file.id,
+                  img_folder_id: selectedFolderId,
+                }),
+              });
 
-            console.log(`${API_URL}/${userId}/${selectedFolderId}/images`);
-
-            await fetch(`${API_URL}/${userId}/${selectedFolderId}/images`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${accessToken}`,
-              },
-              body: JSON.stringify({
-                images: newImages,
-                token: accessToken,
-                email,
-                user_id: userId,
-              }),
-            });
-
-            setImages((prev) => (Array.isArray(prev) ? [...prev, ...newImages] : newImages));
-          } catch {
-            setError("Không thể lưu ảnh từ Google Drive.");
+              newImages.push(newImg);
+            } catch (err) {
+              console.error("Lỗi khi lưu ảnh:", err);
+              setError("Không thể lưu ảnh từ Google Drive.");
+            }
           }
+
+          setImages((prev) => [...prev, ...newImages]);
         }
       })
       .build();
@@ -284,29 +274,19 @@ const Dashboard: React.FC = () => {
     picker.setVisible(true);
   };
 
-  // Folder CRUD handlers giữ nguyên
-
-    const handleAddFolder = async (parentId: number | null) => {
+  const handleAddFolder = async (parentId: number | null) => {
     const name = prompt("Tên thư mục:");
     if (!name) return;
 
     const userId = getCurrentUserId();
-
     try {
       const response = await fetch(`${API_URL}/folder/create/`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: name.trim(),
-          parentId: parentId ?? null,
-          owner: userId,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), parentId: parentId ?? null, owner: userId }),
       });
 
       if (!response.ok) throw new Error("Lỗi khi tạo thư mục");
-
       const newFolder = await response.json();
 
       setFolders((prev) => [
@@ -320,11 +300,9 @@ const Dashboard: React.FC = () => {
         },
       ]);
     } catch (err) {
-      console.error("❌ Lỗi khi tạo thư mục:", err);
-      alert("Không thể tạo thư mục. Vui lòng thử lại.");
+      alert("Không thể tạo thư mục.");
     }
   };
-
 
   const handleUpdateFolder = (updated: Folder) => {
     setFolders((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
@@ -343,7 +321,7 @@ const Dashboard: React.FC = () => {
     };
 
     setFolders((prev) => deleteRecursively(id, prev));
-    setImages((prev) => (Array.isArray(prev) ? prev.filter((img) => img.folderId !== id) : []));
+    setImages((prev) => prev.filter((img) => img.folder_id !== id));
   };
 
   return (
@@ -370,14 +348,13 @@ const Dashboard: React.FC = () => {
             <FolderConfig folder={selectedFolder} onUpdate={handleUpdateFolder} />
           </div>
         )}
-
         <ImageGrid
           folderId={selectedFolderId}
           folders={folders}
           images={images}
           onSyncDrive={handleSyncDrive}
           onSelectFolder={(id) => navigate(`/folder/${id}`)}
-          onUploaded={(newImgs) => setImages((prev) => (Array.isArray(prev) ? [...prev, ...newImgs] : newImgs))}
+          onUploaded={(newImgs) => setImages((prev) => [...prev, ...newImgs])}
           onUpload={handleUpload}
         />
       </div>
