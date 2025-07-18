@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import UploadImages from "./UploadImages";
 import type { ImageItem } from "../types";
+
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api";
 
 interface Folder {
   id: number;
@@ -13,61 +15,65 @@ interface Folder {
 interface ImageGridProps {
   folderId: number | null;
   folders: Folder[];
-  images: ImageItem[] | null | undefined;
+  images: ImageItem[];
   onSyncDrive: () => void;
   onSelectFolder: (id: number | null) => void;
   onUploaded: (newImgs: ImageItem[]) => void;
-  onUpload?: (files: FileList) => void;
+  onUpload: (files: FileList) => Promise<void>;
 }
 
 const ImageGrid: React.FC<ImageGridProps> = ({
   folderId,
   folders,
-  images,
   onSyncDrive,
   onUploaded,
 }) => {
+  const [images, setImages] = useState<ImageItem[]>([]);
+  const [error, setError] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [filter, setFilter] = useState({
-    year: "",
-    month: "",
-    day: "",
-  });
+  const [filter, setFilter] = useState({ year: "", month: "", day: "" });
 
   const currentFolder = folders.find((f) => f.id === folderId);
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const user_id = user?.id;
 
-  // An toàn: kiểm tra images là mảng
-  const safeImages = Array.isArray(images) ? images : [];
+  // Fetch ảnh từ API
+  useEffect(() => {
+    const fetchImages = async () => {
+      if (!user_id || !folderId) {
+        setError("Thiếu user_id hoặc folder_id");
+        return;
+      }
+      try {
+        const res = await fetch(`${API_URL}/${user_id}/${folderId}/images`);
+        const data = await res.json();
+        setImages(data.images || []);
+      } catch (err) {
+        console.error("Error fetching images:", err);
+        setError("Không thể tải ảnh.");
+      }
+    };
 
-  // Lọc ảnh theo folderId
-  let currentImages = folderId
-    ? safeImages.filter((img) => img.folderId === folderId)
-    : [];
+    fetchImages();
+  }, [user_id, folderId]);
 
-  // Áp dụng lọc theo ngày/tháng/năm
-  if (filter.year || filter.month || filter.day) {
-    currentImages = currentImages.filter((img) => {
-      if (!img.createdAt) return false;
-      const date = new Date(img.createdAt);
-      const matchYear = filter.year ? date.getFullYear() === parseInt(filter.year) : true;
-      const matchMonth = filter.month ? date.getMonth() + 1 === parseInt(filter.month) : true;
-      const matchDay = filter.day ? date.getDate() === parseInt(filter.day) : true;
-      return matchYear && matchMonth && matchDay;
-    });
-  }
+  // Lọc ảnh
+  const filteredImages = images.filter((img) => {
+    const date = new Date(img.created_at);
+    const matchYear = filter.year ? date.getFullYear() === +filter.year : true;
+    const matchMonth = filter.month ? date.getMonth() + 1 === +filter.month : true;
+    const matchDay = filter.day ? date.getDate() === +filter.day : true;
+    return matchYear && matchMonth && matchDay;
+  });
 
   return (
     <div>
-      {/* Tiêu đề thư mục */}
-      <div className="mb-4">
-        <h2 className="text-xl font-semibold">
-          {folderId
-            ? `📁 ${currentFolder?.name || "Thư mục"}`
-            : "Chọn thư mục để xem ảnh"}
-        </h2>
-      </div>
+      {/* Tiêu đề */}
+      <h2 className="text-xl font-semibold mb-4">
+        {folderId ? `📁 ${currentFolder?.name || "Thư mục"}` : "Chọn thư mục để xem ảnh"}
+      </h2>
 
-      {/* Bộ lọc ảnh */}
+      {/* Bộ lọc */}
       {folderId && (
         <div className="mb-4 flex gap-4">
           <input
@@ -97,27 +103,29 @@ const ImageGrid: React.FC<ImageGridProps> = ({
       {/* Danh sách ảnh */}
       {folderId && (
         <>
-          {currentImages.length === 0 ? (
+          {filteredImages.length === 0 ? (
             <p className="text-gray-500">Không tìm thấy ảnh phù hợp.</p>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {currentImages.map((img) => (
+              {filteredImages.map((img) => (
                 <div
                   key={img.id}
                   className="cursor-pointer"
-                  onClick={() => setPreviewUrl(img.url)}
+                  onClick={() => setPreviewUrl(img.image)}
                 >
                   <img
-                    src={img.url}
-                    alt={img.name}
+                    src={img.image}
+                    alt={img.image_name}
                     className="w-full h-40 object-cover rounded border"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = "https://via.placeholder.com/200?text=Lỗi+ảnh";
+                    }}
                   />
-                  <p className="text-sm text-center mt-1 truncate">{img.name}</p>
-                  {img.createdAt && (
-                    <p className="text-xs text-center text-gray-500">
-                      {new Date(img.createdAt).toLocaleDateString("vi-VN")}
-                    </p>
-                  )}
+                  <p className="text-sm text-center mt-1 truncate">{img.image_name}</p>
+                  <p className="text-xs text-center text-gray-500">
+                    {new Date(img.created_at).toLocaleDateString("vi-VN")}
+                  </p>
                 </div>
               ))}
             </div>
@@ -131,12 +139,15 @@ const ImageGrid: React.FC<ImageGridProps> = ({
           <UploadImages
             folderId={folderId}
             disabled={!currentFolder.allowUpload}
-            onUploaded={onUploaded}
+            onUploaded={(newImgs) => {
+              setImages((prev) => [...prev, ...newImgs]);
+              onUploaded(newImgs);
+            }}
           />
         </div>
       )}
 
-      {/* Nút đồng bộ Drive */}
+      {/* Nút đồng bộ */}
       {folderId && currentFolder?.allowSync && (
         <div className="mt-4">
           <button

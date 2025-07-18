@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Test Image URL</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    input[type="text"] {
+      width: 80%;
+      padding: 10px;
+      font-size: 16px;
+    }
+    button {
+      padding: 10px 16px;
+      margin-left: 10px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    img {
+      margin-top: 20px;
+      max-width: 100%;
+      height: auto;
+      border: 1px solid #ccc;
+    }
+    #error {
+      color: red;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>🔗 Test Ảnh từ URL</h2>
+  <input type="text" id="imageUrl" placeholder= http://127.0.0.1:8000/media/images/logo_vlPanGL.png />
+  <button onclick="loadImage()">Xem ảnh</button>
+
+  <div id="error"></div>
+  <div id="imageContainer">
+    <img id="previewImage" src="" alt="" style="display: none;" />
+  </div>
+
+  <script>
+    function loadImage() {
+      const url = document.getElementById("imageUrl").value;
+      const img = document.getElementById("previewImage");
+      const error = document.getElementById("error");
+
+      img.style.display = "none";
+      error.textContent = "";
+
+      img.onload = () => {
+        img.style.display = "block";
+      };
+
+      img.onerror = () => {
+        error.textContent = "❌ Không thể tải ảnh từ URL này.";
+        img.style.display = "none";
+      };
+
+      img.src = url;
+    }
+  </script>
+
+</body>
+</html>

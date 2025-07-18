@@ -14,6 +14,14 @@ const UploadImages: React.FC<Props> = ({ folderId, disabled, onUploaded }) => {
     const files = e.target.files;
     if (!files || !folderId) return;
 
+    // ✅ Lấy user_id từ localStorage
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    const user_id = user?.id;
+    if (!user_id) {
+      alert("Không tìm thấy user_id trong localStorage.");
+      return;
+    }
+
     const uploadPromises = Array.from(files).map(async (file) => {
       if (!file.type.startsWith("image/")) {
         alert("Không phải ảnh hợp lệ");
@@ -25,26 +33,17 @@ const UploadImages: React.FC<Props> = ({ folderId, disabled, onUploaded }) => {
         return null;
       }
 
-
-      // test 
-      const user_id = 1;
-      const folderId = 1;
-
       const formData = new FormData();
       formData.append("img_file", file);
       formData.append("folder_id", folderId.toString());
-      formData.append("img_name", file.name); // Optional
-      formData.append("user_id", user_id.toString()); // Optional
+      formData.append("img_name", file.name);
+      formData.append("user_id", user_id.toString());
 
-
-
-      console.log("formData:", formData);
       try {
         const res = await fetch("http://localhost:8000/api/upload/img/", {
           method: "POST",
           body: formData,
         });
-
 
         if (!res.ok) {
           const error = await res.text();

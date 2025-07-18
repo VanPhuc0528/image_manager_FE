@@ -1,7 +1,7 @@
 export interface ImageItem{
     id: string;
-    name: string;
-    url: string;
-    folderId: number;
-    createdAt: string;
+    image_name: string;
+    image: string;
+    folder_id: number;
+    created_at: string;
 }
