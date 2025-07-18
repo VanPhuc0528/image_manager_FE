@@ -182,6 +182,7 @@ const Dashboard: React.FC = () => {
       callback: async (tokenResponse: { access_token: string }) => {
         const accessToken = tokenResponse.access_token;
         accessTokenRef.current = accessToken;
+        console.log("Access Token:", accessToken)
 
         try {
           const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
@@ -192,14 +193,14 @@ const Dashboard: React.FC = () => {
           const driveEmail = userInfo.email;
 
           const userId = getCurrentUserId();
-          await fetch(`${API_URL}/${userId}/save_drive_token/`, {
+          await fetch(`${API_URL}/${userId}/save-token/`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${accessToken}`,
+              Authorization: `Bearer ${tokenResponse.access_token}`,
             },
-            body: JSON.stringify({ token: accessToken }),
-          });
+            body: JSON.stringify({ token: tokenResponse.access_token }),
+          }). catch((err) => console.error("❌ Lỗi gửi token:", err));
 
           showPicker(accessToken, driveEmail);
         } catch (err) {
@@ -234,17 +235,19 @@ const Dashboard: React.FC = () => {
               folder_id: selectedFolderId,
               created_at: new Date().toISOString(),
             };
-                const body =JSON.stringify({
-                  user_id: getCurrentUserId(),
-                  drive_email: driveEmail,
-                  img_name: file.name,
-                  img_id: file.id,
-                  img_folder_id: selectedFolderId,
-                })
-                console.log("body:", body)
+
+            const body = JSON.stringify({
+              user_id: getCurrentUserId,
+              drive_email: driveEmail,
+              img_name: file.name,
+              img_id: file.id,
+              img_folder_id: selectedFolderId,
+            })
+            console.log("Body", body)
+
             try {
               const userId = getCurrentUserId();
-              await fetch(`${API_URL}/sync/img/`, {
+              await fetch(`${API_URL}/${userId}/${selectedFolderId}/images`, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
