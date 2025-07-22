@@ -31,7 +31,7 @@ const ImageGrid: React.FC<ImageGridProps> = ({
   const [images, setImages] = useState<ImageItem[]>([]);
   const [error, setError] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [filter, setFilter] = useState({ year: "", month: "", day: "" });
+  const [filter, setFilter] = useState({ year: "", month: "", day: "", keyword: "" });
 
   const currentFolder = folders.find((f) => f.id === folderId);
   const user = JSON.parse(localStorage.getItem("user") || "{}");
@@ -63,7 +63,8 @@ const ImageGrid: React.FC<ImageGridProps> = ({
     const matchYear = filter.year ? date.getFullYear() === +filter.year : true;
     const matchMonth = filter.month ? date.getMonth() + 1 === +filter.month : true;
     const matchDay = filter.day ? date.getDate() === +filter.day : true;
-    return matchYear && matchMonth && matchDay;
+    const matchesName = !filter.keyword || img.image_name.toLowerCase().includes(filter.keyword.toLowerCase());
+    return matchYear && matchMonth && matchDay && matchesName;
   });
 
   return (
@@ -76,25 +77,47 @@ const ImageGrid: React.FC<ImageGridProps> = ({
       {/* Bộ lọc */}
       {folderId && (
         <div className="mb-4 flex gap-4">
-          <input
-            type="number"
-            placeholder="Năm (VD: 2025)"
+          <select
             value={filter.year}
             onChange={(e) => setFilter({ ...filter, year: e.target.value })}
             className="border px-2 py-1 rounded"
-          />
-          <input
-            type="number"
-            placeholder="Tháng (1-12)"
+          >
+            <option value="">Chọn năm</option>
+            {Array.from({ length: 16 }, (_, i) => {
+              const year = 2015 + i;
+              return (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              );
+            })}
+          </select>
+          <select
             value={filter.month}
             onChange={(e) => setFilter({ ...filter, month: e.target.value })}
             className="border px-2 py-1 rounded"
-          />
-          <input
-            type="number"
-            placeholder="Ngày (1-31)"
+          >
+            <option value="">Chọn tháng</option>
+            {Array.from({ length: 12 }, (_, i) => (
+              <option key={i + 1} value={i + 1}>{i + 1}</option>
+            ))}
+          </select>
+          <select
             value={filter.day}
             onChange={(e) => setFilter({ ...filter, day: e.target.value })}
+            className="border px-2 py-1 rounded"
+          >
+            <option value="">Chọn ngày</option>
+            {Array.from({ length: 31 }, (_, i) => (
+              <option key={i + 1} value={i + 1}>{i + 1}</option>
+            ))}
+          </select>
+          {/* Tên ảnh */}
+          <input
+            type="text"
+            placeholder="Tìm ảnh theo tên"
+            value={filter.keyword || ""}
+            onChange={(e) => setFilter({ ...filter, keyword: e.target.value })}
             className="border px-2 py-1 rounded"
           />
         </div>
