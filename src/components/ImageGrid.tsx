@@ -32,10 +32,20 @@ const ImageGrid: React.FC<ImageGridProps> = ({
   const [error, setError] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [filter, setFilter] = useState({ year: "", month: "", day: "", keyword: "" });
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const currentFolder = folders.find((f) => f.id === folderId);
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const user_id = user?.id;
+
+  const formatDate = (dateStr: string): string => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  };
 
   // Fetch ảnh từ API
   useEffect(() => {
@@ -74,86 +84,105 @@ const ImageGrid: React.FC<ImageGridProps> = ({
         {folderId ? `📁 ${currentFolder?.name || "Thư mục"}` : "Chọn thư mục để xem ảnh"}
       </h2>
 
-      {/* Bộ lọc */}
       {folderId && (
-        <div className="mb-4 flex gap-4">
-          <select
-            value={filter.year}
-            onChange={(e) => setFilter({ ...filter, year: e.target.value })}
-            className="border px-2 py-1 rounded"
-          >
-            <option value="">Chọn năm</option>
-            {Array.from({ length: 16 }, (_, i) => {
-              const year = 2015 + i;
-              return (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              );
-            })}
-          </select>
-          <select
-            value={filter.month}
-            onChange={(e) => setFilter({ ...filter, month: e.target.value })}
-            className="border px-2 py-1 rounded"
-          >
-            <option value="">Chọn tháng</option>
-            {Array.from({ length: 12 }, (_, i) => (
-              <option key={i + 1} value={i + 1}>{i + 1}</option>
-            ))}
-          </select>
-          <select
-            value={filter.day}
-            onChange={(e) => setFilter({ ...filter, day: e.target.value })}
-            className="border px-2 py-1 rounded"
-          >
-            <option value="">Chọn ngày</option>
-            {Array.from({ length: 31 }, (_, i) => (
-              <option key={i + 1} value={i + 1}>{i + 1}</option>
-            ))}
-          </select>
-          {/* Tên ảnh */}
-          <input
-            type="text"
-            placeholder="Tìm ảnh theo tên"
-            value={filter.keyword || ""}
-            onChange={(e) => setFilter({ ...filter, keyword: e.target.value })}
-            className="border px-2 py-1 rounded"
-          />
+        <div className="mb-4 flex justify-between items-center flex-wrap gap-4">
+          {/* Bộ lọc bên trái */}
+          <div className="flex gap-2 flex-wrap">
+            <select
+              value={filter.year}
+              onChange={(e) => setFilter({ ...filter, year: e.target.value })}
+              className="border px-2 py-1 rounded"
+            >
+              <option value="">Chọn năm</option>
+              {Array.from({ length: 16 }, (_, i) => {
+                const year = 2015 + i;
+                return (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                );
+              })}
+            </select>
+            <select
+              value={filter.month}
+              onChange={(e) => setFilter({ ...filter, month: e.target.value })}
+              className="border px-2 py-1 rounded"
+            >
+              <option value="">Chọn tháng</option>
+              {Array.from({ length: 12 }, (_, i) => (
+                <option key={i + 1} value={i + 1}>{i + 1}</option>
+              ))}
+            </select>
+            <select
+              value={filter.day}
+              onChange={(e) => setFilter({ ...filter, day: e.target.value })}
+              className="border px-2 py-1 rounded"
+            >
+              <option value="">Chọn ngày</option>
+              {Array.from({ length: 31 }, (_, i) => (
+                <option key={i + 1} value={i + 1}>{i + 1}</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              placeholder="Tìm ảnh theo tên"
+              value={filter.keyword || ""}
+              onChange={(e) => setFilter({ ...filter, keyword: e.target.value })}
+              className="border px-2 py-1 rounded"
+            />
+          </div>
+
+          {/* Nút chuyển đổi dạng xem bên phải */}
+          <div className="flex items-center border rounded-full overflow-hidden">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`px-4 py-2 ${viewMode === 'list' ? 'bg-blue-100' : 'bg-white'}`}
+              title="Xem dạng danh sách"
+            >
+              <i className="fas fa-bars" />
+            </button>
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`px-4 py-2 ${viewMode === 'grid' ? 'bg-blue-100' : 'bg-white'}`}
+              title="Xem dạng lưới"
+            >
+              <i className="fas fa-th" />
+            </button>
+          </div>
         </div>
       )}
 
+
       {/* Danh sách ảnh */}
-      {folderId && (
-        <>
-          {filteredImages.length === 0 ? (
-            <p className="text-gray-500">Không tìm thấy ảnh phù hợp.</p>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {filteredImages.map((img) => (
-                <div
-                  key={img.id}
-                  className="cursor-pointer"
-                  onClick={() => setPreviewUrl(img.image)}
-                >
-                  <img
-                    src={img.image}
-                    alt={img.image_name}
-                    className="w-full h-40 object-cover rounded border"
-                    onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = "https://via.placeholder.com/200?text=Lỗi+ảnh";
-                    }}
-                  />
-                  <p className="text-sm text-center mt-1 truncate">{img.image_name}</p>
-                  <p className="text-xs text-center text-gray-500">
-                    {new Date(img.created_at).toLocaleDateString("vi-VN")}
-                  </p>
-                </div>
-              ))}
+      {folderId && filteredImages.length > 0 && (
+        <div className={viewMode === 'grid' ? 'grid grid-cols-2 md:grid-cols-4 gap-4' : 'flex flex-col gap-2'}>
+          {filteredImages.map((img) => (
+            <div
+              key={img.id}
+              className={`border rounded-lg overflow-hidden shadow ${viewMode === 'list' ? 'flex items-center' : ''}`}
+              onClick={() => setPreviewUrl(img.image)}
+            >
+              <img
+                src={img.image}
+                alt={img.image_name}
+                className={viewMode === 'list' ? 'w-24 h-24 object-cover mr-4' : 'w-full h-48 object-cover'}
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = "https://via.placeholder.com/200?text=Lỗi+ảnh";
+                }}
+              />
+              <div className="p-2">
+                <div className="font-semibold">{img.image_name}</div>
+                <div className="text-sm text-gray-500">{formatDate(img.created_at)}</div>
+              </div>
             </div>
-          )}
-        </>
+          ))}
+        </div>
+      )}
+
+      {/* Không tìm thấy ảnh */}
+      {folderId && filteredImages.length === 0 && (
+        <p className="text-gray-500">Không tìm thấy ảnh phù hợp.</p>
       )}
 
       {/* Upload ảnh */}
@@ -170,7 +199,7 @@ const ImageGrid: React.FC<ImageGridProps> = ({
         </div>
       )}
 
-      {/* Nút đồng bộ */}
+      {/* Đồng bộ Drive */}
       {folderId && currentFolder?.allowSync && (
         <div className="mt-4">
           <button
