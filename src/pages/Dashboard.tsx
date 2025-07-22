@@ -16,7 +16,7 @@ interface Folder {
   parentId: number | null;
   allowUpload?: boolean;
   allowSync?: boolean;
-}
+} 
 
 interface GooglePickerFile {
   id: string;
@@ -61,7 +61,7 @@ const Dashboard: React.FC = () => {
     const fetchFolders = async () => {
       try {
         const userId = getCurrentUserId();
-        const response = await fetch(`${API_URL}/home/${userId}`);
+        const response = await fetch(`${API_URL}/user/${userId}/home/`);
         if (!response.ok) throw new Error("Lỗi tải thư mục");
         const data = await response.json();
 
@@ -90,7 +90,7 @@ const Dashboard: React.FC = () => {
       }
       try {
         const userId = getCurrentUserId();
-        const res = await fetch(`${API_URL}/${userId}/${selectedFolderId}/images`);
+        const res = await fetch(`${API_URL}/user/${userId}/folder/${selectedFolderId}/images/`);
         if (!res.ok) throw new Error("Lỗi khi tải ảnh từ server");
         const data = await res.json();
         setImages(data.images || []);
@@ -137,7 +137,6 @@ const Dashboard: React.FC = () => {
     if (!selectedFolder?.allowUpload || !selectedFolderId || files.length === 0) return;
     setLoading(true);
     try {
-      const userId = getCurrentUserId();
       const uploadPromises = Array.from(files).map(async (file) => {
         if (!file.type.startsWith("image/")) throw new Error(`File ${file.name} không hợp lệ`);
         if (file.size > 10 * 1024 * 1024) throw new Error(`File ${file.name} quá lớn`);
@@ -147,7 +146,10 @@ const Dashboard: React.FC = () => {
         formData.append("folderId", selectedFolderId.toString());
         formData.append("createdAt", new Date().toISOString());
 
-        const res = await fetch(`${API_URL}/${userId}/${selectedFolderId}/images/`, {
+        console.log("formData:", formData);
+
+        const userId = getCurrentUserId();
+        const res = await fetch(`${API_URL}/user/${userId}/upload/img/`, {
           method: "POST",
           body: formData,
         });
@@ -193,13 +195,17 @@ const Dashboard: React.FC = () => {
           const driveEmail = userInfo.email;
 
           const userId = getCurrentUserId();
-          await fetch(`${API_URL}/${userId}/save-token/`, {
+          await fetch(`${API_URL}/user/${userId}/sync/save_drive_token/`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${tokenResponse.access_token}`,
             },
-            body: JSON.stringify({ token: tokenResponse.access_token }),
+            body: JSON.stringify({ 
+              access_token: tokenResponse.access_token,
+              user_id: userId,
+              drive_email: driveEmail,
+             }),
           }). catch((err) => console.error("❌ Lỗi gửi token:", err));
 
           showPicker(accessToken, driveEmail);
@@ -247,7 +253,7 @@ const Dashboard: React.FC = () => {
 
             try {
               const userId = getCurrentUserId();
-              await fetch(`${API_URL}/${userId}/${selectedFolderId}/images`, {
+              await fetch(`${API_URL}/user/${userId}/sync/img/`, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -283,7 +289,7 @@ const Dashboard: React.FC = () => {
 
     const userId = getCurrentUserId();
     try {
-      const response = await fetch(`${API_URL}/folder/create/`, {
+      const response = await fetch(`${API_URL}/user/${userId}/folder/create/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: name.trim(), parentId: parentId ?? null, owner: userId }),

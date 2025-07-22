@@ -21,8 +21,6 @@ export interface GoogleUser {
 
 const GoogleLogin: React.FC = () => {
   const [user, setUser] = useState<GoogleUser | null>(null);
-  const [idToken, setIdToken] = useState<string | null>(null);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
 
   useEffect(() => {
     // Load Google SDK
@@ -32,7 +30,6 @@ const GoogleLogin: React.FC = () => {
         callback: handleCredentialResponse,
         auto_select: false,
       });
-      window.google.accounts.id.prompt();
     };
 
     const script = document.createElement('script');
@@ -42,18 +39,10 @@ const GoogleLogin: React.FC = () => {
     script.onload = initializeGoogleId;
     document.body.appendChild(script);
 
-    // Load tokens và user từ localStorage khi app start
-    const savedIdToken = localStorage.getItem('idToken');
-    const savedAccessToken = localStorage.getItem('accessToken');
+    // Load user from localStorage
     const savedUser = localStorage.getItem('user');
-
-    if (savedIdToken && savedUser) {
-      setIdToken(savedIdToken);
+    if (savedUser) {
       setUser(JSON.parse(savedUser));
-    }
-
-    if (savedAccessToken) {
-      setAccessToken(savedAccessToken);
     }
   }, []);
 
@@ -64,7 +53,7 @@ const GoogleLogin: React.FC = () => {
         atob(base64)
           .split('')
           .map((c) => `%${('00' + c.charCodeAt(0).toString(16)).slice(-2)}`)
-          .join(''),
+          .join('')
       );
       return JSON.parse(json);
     } catch {
@@ -77,6 +66,7 @@ const GoogleLogin: React.FC = () => {
       console.warn('No credential received from Google');
       return;
     }
+
     const decoded = parseJwt(response.credential);
     if (decoded) {
       const profile: GoogleUser = {
@@ -89,37 +79,32 @@ const GoogleLogin: React.FC = () => {
         email_verified: decoded.email_verified,
       };
       setUser(profile);
-      setIdToken(response.credential);
-
-      // Lưu token và user vào localStorage
-      localStorage.setItem('idToken', response.credential);
       localStorage.setItem('user', JSON.stringify(profile));
-
-      if (accessToken) {
-        sendToBackend({
-          access_token: accessToken,
-          id_token: response.credential,
-          user_info: profile,
-          timestamp: new Date().toISOString(),
-        });
-      }
     }
   };
 
-  const sendToBackend = async (payload: any) => {
+  const loginWithGoogle = async (accessToken: string) => {
     try {
-      if (!payload.id_token) {
-        delete payload.id_token;
-      }
-      const res = await fetch(`${API_URL}/auth/google/`, {
+      const res = await fetch(`${API_URL}/auth/gg_login/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ access_token: accessToken }),
       });
+
       const data = await res.json();
-      console.log('Backend response:', data);
-    } catch (err) {
-      console.error('Error sending to backend:', err);
+      console.log('✅ Backend login response:', data);
+
+      const user = data?.data || data?.user || data;
+      if (!user?.id) {
+        throw new Error('Không tìm thấy thông tin người dùng.');
+      }
+
+      // Lưu thông tin nếu cần
+      localStorage.setItem('user', JSON.stringify(user));
+      setUser(user);
+    } catch (err: unknown) {
+      console.error('❌ Lỗi đăng nhập với Google:', err);
+      alert('Đăng nhập thất bại!');
     }
   };
 
@@ -132,7 +117,7 @@ const GoogleLogin: React.FC = () => {
           console.error('No access token received');
           return;
         }
-        setAccessToken(tokenResponse.access_token);
+
         localStorage.setItem('accessToken', tokenResponse.access_token);
 
         fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
@@ -145,28 +130,20 @@ const GoogleLogin: React.FC = () => {
             setUser(profile);
             localStorage.setItem('user', JSON.stringify(profile));
 
-            sendToBackend({
-              access_token: tokenResponse.access_token,
-              id_token: idToken ?? undefined,
-              user_info: profile,
-              timestamp: new Date().toISOString(),
-            });
+            // Gửi access_token về backend
+            loginWithGoogle(tokenResponse.access_token);
           })
           .catch(console.error);
       },
     });
+
     tokenClient.requestAccessToken();
   };
 
   const logout = () => {
     setUser(null);
-    setIdToken(null);
-    setAccessToken(null);
-
-    // Xóa localStorage khi logout
-    localStorage.removeItem('idToken');
-    localStorage.removeItem('accessToken');
     localStorage.removeItem('user');
+    localStorage.removeItem('accessToken');
   };
 
   return (

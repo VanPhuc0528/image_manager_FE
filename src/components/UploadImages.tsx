@@ -1,11 +1,21 @@
 import React, { useRef } from "react";
 import type { ImageItem } from "../types";
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api";
 
 interface Props {
   folderId: number | null;
   disabled: boolean;
   onUploaded: (newImgs: ImageItem[]) => void;
 }
+
+const getCurrentUserId = (): number => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      return user?.id || 1;
+    } catch {
+      return 1;
+    }
+  };
 
 const UploadImages: React.FC<Props> = ({ folderId, disabled, onUploaded }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -40,7 +50,8 @@ const UploadImages: React.FC<Props> = ({ folderId, disabled, onUploaded }) => {
       formData.append("user_id", user_id.toString());
 
       try {
-        const res = await fetch("http://localhost:8000/api/upload/img/", {
+        const userId = getCurrentUserId();
+        const res = await fetch(`${API_URL}/user/${userId}/upload/img/`, {
           method: "POST",
           body: formData,
         });

@@ -45,7 +45,7 @@ const ImageGrid: React.FC<ImageGridProps> = ({
         return;
       }
       try {
-        const res = await fetch(`${API_URL}/${user_id}/${folderId}/images`);
+        const res = await fetch(`${API_URL}/user/${user_id}/folder/${folderId}/images/`);
         const data = await res.json();
         setImages(data.images || []);
       } catch (err) {

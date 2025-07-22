@@ -1,108 +1,103 @@
-import React, { useEffect, useState, useCallback } from "react";
-import { getPermissions, setPermission } from "../services/permission";
+import React, { useState } from "react";
+import {
+  Input,
+  Button,
+  Select,
+  MenuItem,
+  Card,
+  CardContent,
+} from "@mui/material";
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api";
 
-interface PermissionShareProps {
-  folderId: number;
-}
-
-interface UserPermission {
+interface SharedUser {
   email: string;
-  permission: "read" | "write";
+  permission: "reader" | "writer" | "deleter";
 }
 
-const PermissionShare: React.FC<PermissionShareProps> = ({ folderId }) => {
+const PermissionShare: React.FC<{
+  folderId: number;
+  userId: number;
+  onSubmit?: () => void;
+}> = ({ folderId, userId, onSubmit }) => {
   const [email, setEmail] = useState("");
-  const [permission, setPerm] = useState<"read" | "write">("read");
-  const [users, setUsers] = useState<UserPermission[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [permission, setPermission] = useState<"reader" | "writer" | "deleter">("reader");
+  const [sharedList, setSharedList] = useState<SharedUser[]>([]);
 
-  const fetchPermissions = useCallback(async () => {
-    try {
-      setLoading(true);
-      const list = await getPermissions(folderId);
-      setUsers(list);
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Không thể lấy quyền thư mục.");
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [folderId]);
+  const handleAddUser = () => {
+    if (!email) return;
 
-  useEffect(() => {
-    fetchPermissions();
-  }, [fetchPermissions]);
+    const newUser: SharedUser = { email, permission };
+    setSharedList([...sharedList, newUser]);
+    setEmail("");
+    setPermission("reader");
+  };
 
-  const handleAdd = async () => {
-    if (!email.trim()) return;
-    try {
-      setLoading(true);
-      await setPermission(folderId, email.trim(), permission);
-      setEmail("");
-      fetchPermissions();
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Lỗi khi thêm quyền.");
-      }
-    } finally {
-      setLoading(false);
-    }
+  const handleSubmit = async () => {
+    const grouped = {
+      allow_read: sharedList.filter(u => u.permission === "reader").map(u => u.email),
+      allow_write: sharedList.filter(u => u.permission === "writer").map(u => u.email),
+      allow_delete: sharedList.filter(u => u.permission === "deleter").map(u => u.email),
+    };
+
+    console.log("Danh sách phân quyền gửi lên backend:", grouped);
+
+    await fetch(`${API_URL}/user/${userId}/folder/${folderId}/change_permission/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(grouped),
+    });
+
+    if (onSubmit) onSubmit();
   };
 
   return (
-    <div className="mt-6 p-4 border rounded">
-      <h3 className="font-semibold mb-2">🔐 Chia sẻ thư mục</h3>
+    <Card sx={{ p: 2, maxWidth: 500 }}>
+      <CardContent>
+        <h3>Phân quyền thư mục</h3>
 
-      <div className="flex gap-2 mb-3">
-        <input
-          className="border px-2 py-1 flex-1 rounded"
-          placeholder="Nhập email người nhận"
+        <Input
           value={email}
+          placeholder="Nhập email người dùng"
           onChange={(e) => setEmail(e.target.value)}
+          fullWidth
         />
-        <select
+
+        <Select
           value={permission}
-          onChange={(e) => setPerm(e.target.value as "read" | "write")}
-          className="border px-2 py-1 rounded"
+          onChange={(e) => setPermission(e.target.value as SharedUser["permission"])}
+          fullWidth
+          sx={{ mt: 2, mb: 2 }}
         >
-          <option value="read">Chỉ xem</option>
-          <option value="write">Toàn quyền</option>
-        </select>
-        <button
-          onClick={handleAdd}
-          className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700"
-        >
-          Thêm
-        </button>
-      </div>
+          <MenuItem value="reader">Người xem</MenuItem>
+          <MenuItem value="writer">Người chỉnh sửa</MenuItem>
+          <MenuItem value="deleter">Người xoá</MenuItem>
+        </Select>
 
-      {error && (
-        <div className="text-red-600 text-sm mb-2">
-          {error} <button onClick={() => setError(null)}>✖</button>
+        <Button onClick={handleAddUser} variant="contained" fullWidth>
+          Thêm người dùng
+        </Button>
+
+        <div style={{ marginTop: 20 }}>
+          <strong>Danh sách phân quyền:</strong>
+          <ul>
+            {sharedList.map((user, idx) => (
+              <li key={idx}>
+                {user.email} —{" "}
+                {user.permission === "reader"
+                  ? "Người xem"
+                  : user.permission === "writer"
+                  ? "Người chỉnh sửa"
+                  : "Người xoá"}
+              </li>
+            ))}
+          </ul>
         </div>
-      )}
 
-      {loading ? (
-        <p className="text-sm text-blue-600">Đang tải quyền...</p>
-      ) : users.length === 0 ? (
-        <p className="text-sm text-gray-500">Chưa có người được chia sẻ.</p>
-      ) : (
-        <ul className="text-sm text-gray-700 space-y-1">
-          {users.map((u, i) => (
-            <li key={i}>
-              👤 {u.email} — quyền:{" "}
-              <span className="font-semibold">{u.permission === "read" ? "Xem" : "Toàn quyền"}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+        <Button onClick={handleSubmit} variant="contained" color="success" fullWidth sx={{ mt: 2 }}>
+          Lưu phân quyền
+        </Button>
+      </CardContent>
+    </Card>
   );
 };
 
