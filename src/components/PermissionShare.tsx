@@ -41,9 +41,10 @@ const PermissionShare: React.FC<{
 
     console.log("Danh sách phân quyền gửi lên backend:", grouped);
 
+    const token = localStorage.getItem("token");
     await fetch(`${API_URL}/user/${userId}/folder/${folderId}/change_permission/`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify(grouped),
     });
 

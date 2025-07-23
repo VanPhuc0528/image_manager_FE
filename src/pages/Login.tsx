@@ -13,12 +13,14 @@ const Login: React.FC = () => {
     setError("");
 
     try {
-      const data = await login(email, password);
-      const user = data?.user;
+      const { user, token } = await login(email, password);
 
-      if (user?.id) {
-        localStorage.setItem("user", JSON.stringify(user));
+      if (!user?.id || !token) {
+        throw new Error("Đăng nhập thất bại: Thiếu thông tin người dùng hoặc token.");
       }
+
+      localStorage.setItem("user", JSON.stringify(user));
+      localStorage.setItem("token", token);
 
       console.log("✅ Đăng nhập thành công:", user);
       navigate("/");
@@ -47,7 +49,6 @@ const Login: React.FC = () => {
           <p className="text-red-500 text-sm text-center mb-4">{error}</p>
         )}
 
-
         <div className="border-t border-gray-300 mb-4"></div>
 
         <input
@@ -67,7 +68,7 @@ const Login: React.FC = () => {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-        
+
         <div className="flex gap-3 mb-4">
           <button
             type="submit"

@@ -51,9 +51,13 @@ const UploadImages: React.FC<Props> = ({ folderId, disabled, onUploaded }) => {
 
       try {
         const userId = getCurrentUserId();
+        const token = localStorage.getItem("token");
         const res = await fetch(`${API_URL}/user/${userId}/upload/img/`, {
           method: "POST",
           body: formData,
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         });
 
         if (!res.ok) {

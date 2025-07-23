@@ -55,7 +55,12 @@ const ImageGrid: React.FC<ImageGridProps> = ({
         return;
       }
       try {
-        const res = await fetch(`${API_URL}/user/${user_id}/folder/${folderId}/images/`);
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_URL}/user/${user_id}/folder/${folderId}/images/`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
         const data = await res.json();
         setImages(data.images || []);
       } catch (err) {

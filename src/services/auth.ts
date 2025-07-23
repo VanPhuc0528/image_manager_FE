@@ -1,59 +1,56 @@
-import axios, { AxiosError } from "axios";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api";
+import { AxiosError } from "axios";
+import axiosInstance from "./axiosInstance"; // ✅ Sử dụng axiosInstance
 
 // =============================
-// ✅ Hàm đăng nhập (KHÔNG cần token)
+// ✅ Hàm đăng nhập
 // =============================
 export async function login(email: string, password: string) {
   try {
-    const res = await axios.post(`${API_URL}/auth/login/`, {
-      email,
-      password,
-    });
-    console.log("🔎 login response:", res.data);
+    const res = await axiosInstance.post("/auth/login/", { email, password });
 
-    // 👇 Lấy user từ trường `data` (theo đúng format backend trả về)
-    const user = res.data?.data || res.data?.user || res.data;
-    console.log("🔎 parsed user:", user);
+    const user = res.data?.user;
+    const token = res.data?.token;
 
-    if (!user?.id) {
-      throw new Error("Không tìm thấy thông tin người dùng.");
+    if (!user?.id || !token) {
+      throw new Error("Không tìm thấy thông tin người dùng hoặc token.");
     }
 
-    return { user };
+    // ✅ Lưu token vào localStorage để dùng cho các request sau
+    localStorage.setItem("user", JSON.stringify(user));
+    localStorage.setItem("token", token);
+
+    return { user, token };
   } catch (err: unknown) {
     const error = err as AxiosError<{ message?: string }>;
-    console.error("Lỗi đăng nhập:", error.response?.data || error.message);
     throw new Error(
       error.response?.data?.message || error.message || "Đăng nhập thất bại."
     );
   }
 }
 
-
 // =============================
 // ✅ Hàm đăng nhập với Google (cần token)
 // =============================
-
 export async function loginWithGoogle(accessToken: string) {
   try {
-    const res = await axios.post(`${API_URL}/auth/gg_login/`, {
+    const res = await axiosInstance.post("/auth/gg_login/", {
       access_token: accessToken,
     });
-    console.log("🔎 loginWithGoogle response:", res.data);
 
-    const user = res.data?.data || res.data?.user || res.data;
-    console.log("🔎 parsed user:", user);
+    const user = res.data?.user;
+    const token = res.data?.token;
 
-    if (!user?.id) {
-      throw new Error("Không tìm thấy thông tin người dùng.");
+    if (!user?.id || !token) {
+      throw new Error("Không tìm thấy thông tin người dùng hoặc token.");
     }
 
-    return { user };
+    // ✅ Lưu lại token
+    localStorage.setItem("user", JSON.stringify(user));
+    localStorage.setItem("token", token);
+
+    return { user, token };
   } catch (err: unknown) {
     const error = err as AxiosError<{ message?: string }>;
-    console.error("Lỗi đăng nhập với Google:", error.response?.data || error.message);
     throw new Error(
       error.response?.data?.message || error.message || "Đăng nhập với Google thất bại."
     );
@@ -61,11 +58,11 @@ export async function loginWithGoogle(accessToken: string) {
 }
 
 // =============================
-// ✅ Hàm đăng ký (giữ nguyên)
+// ✅ Hàm đăng ký (không cần token)
 // =============================
 export async function register(username: string, email: string, password: string) {
   try {
-    const res = await axios.post(`${API_URL}/auth/register/`, {
+    const res = await axiosInstance.post("/auth/register/", {
       username,
       email,
       password,

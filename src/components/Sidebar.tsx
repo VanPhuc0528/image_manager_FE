@@ -24,10 +24,14 @@ const Sidebar: React.FC = () => {
 
   useEffect(() => {
     if (!userId) return;
+    const token = localStorage.getItem("token");
     const fetchFolders = async () => {
       try {
         const res = await axios.get("/api/folder/list/", {
           params: { user_id: userId },
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         });
         setFolders(res.data);
       } catch (err) {

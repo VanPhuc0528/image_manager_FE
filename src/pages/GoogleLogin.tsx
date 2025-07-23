@@ -43,23 +43,8 @@ const GoogleLogin: React.FC = () => {
     }
   }, []);
 
-  const parseJwt = (token: string) => {
-    try {
-      const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-      const json = decodeURIComponent(
-        atob(base64)
-          .split('')
-          .map((c) => `%${('00' + c.charCodeAt(0).toString(16)).slice(-2)}`)
-          .join('')
-      );
-      return JSON.parse(json);
-    } catch {
-      return null;
-    }
-  };
-
   const handleCredentialResponse = (response: any) => {
-    // Không xử lý trực tiếp ở đây nữa
+    // Không xử lý trực tiếp ở đây, vì bạn dùng access_token trong tokenClient bên dưới
     console.log("Credential received:", response);
   };
 
@@ -77,15 +62,12 @@ const GoogleLogin: React.FC = () => {
       const user = data?.user;
       const token = data?.token;
 
-      if (!user?.id) {
-        throw new Error('Không tìm thấy thông tin người dùng.');
+      if (!user?.id || !token) {
+        throw new Error('Thiếu thông tin người dùng hoặc token từ backend');
       }
 
       localStorage.setItem('user', JSON.stringify(user));
-      if (token) {
-        localStorage.setItem('token', token);
-      }
-
+      localStorage.setItem('token', token);
       setUser(user);
     } catch (err) {
       console.error('❌ Lỗi đăng nhập với Google:', err);
@@ -99,13 +81,11 @@ const GoogleLogin: React.FC = () => {
       scope: 'openid email profile',
       callback: (tokenResponse: any) => {
         if (!tokenResponse.access_token) {
-          console.error('No access token received');
+          console.error('Không nhận được access_token từ Google');
           return;
         }
 
         localStorage.setItem('accessToken', tokenResponse.access_token);
-
-        // Gửi access_token về backend
         loginWithGoogle(tokenResponse.access_token);
       },
     });

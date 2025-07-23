@@ -61,7 +61,12 @@ const Dashboard: React.FC = () => {
     const fetchFolders = async () => {
       try {
         const userId = getCurrentUserId();
-        const response = await fetch(`${API_URL}/user/${userId}/home/`);
+        const token = localStorage.getItem("token");
+        const response = await fetch(`${API_URL}/user/${userId}/home/`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
         if (!response.ok) throw new Error("Lỗi tải thư mục");
         const data = await response.json();
 
@@ -90,7 +95,12 @@ const Dashboard: React.FC = () => {
       }
       try {
         const userId = getCurrentUserId();
-        const res = await fetch(`${API_URL}/user/${userId}/folder/${selectedFolderId}/images/`);
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_URL}/user/${userId}/folder/${selectedFolderId}/images/`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
         if (!res.ok) throw new Error("Lỗi khi tải ảnh từ server");
         const data = await res.json();
         setImages(data.images || []);
@@ -149,9 +159,13 @@ const Dashboard: React.FC = () => {
         console.log("formData:", formData);
 
         const userId = getCurrentUserId();
+        const token = localStorage.getItem("token");
         const res = await fetch(`${API_URL}/user/${userId}/upload/img/`, {
           method: "POST",
           body: formData,
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         });
 
         if (!res.ok) throw new Error("Upload thất bại");
@@ -195,11 +209,12 @@ const Dashboard: React.FC = () => {
           const driveEmail = userInfo.email;
 
           const userId = getCurrentUserId();
+          const token = localStorage.getItem("token");
           await fetch(`${API_URL}/user/${userId}/sync/save_drive_token/`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${tokenResponse.access_token}`,
+              Authorization: `Bearer ${tokenResponse.access_token}, ${token}`,
             },
             body: JSON.stringify({ 
               access_token: tokenResponse.access_token,
@@ -253,11 +268,12 @@ const Dashboard: React.FC = () => {
 
             try {
               const userId = getCurrentUserId();
+              const token = localStorage.getItem("token");
               await fetch(`${API_URL}/user/${userId}/sync/img/`, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
-                  Authorization: `Bearer ${accessToken}`,
+                  Authorization: `Bearer ${accessToken}, ${token}`,
                 },
                 body: JSON.stringify({
                   user_id: userId,
@@ -288,10 +304,11 @@ const Dashboard: React.FC = () => {
     if (!name) return;
 
     const userId = getCurrentUserId();
+    const token = localStorage.getItem("token");
     try {
       const response = await fetch(`${API_URL}/user/${userId}/folder/create/`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ name: name.trim(), parentId: parentId ?? null, owner: userId }),
       });
 
