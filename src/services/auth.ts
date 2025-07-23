@@ -33,6 +33,34 @@ export async function login(email: string, password: string) {
 
 
 // =============================
+// ✅ Hàm đăng nhập với Google (cần token)
+// =============================
+
+export async function loginWithGoogle(accessToken: string) {
+  try {
+    const res = await axios.post(`${API_URL}/auth/gg_login/`, {
+      access_token: accessToken,
+    });
+    console.log("🔎 loginWithGoogle response:", res.data);
+
+    const user = res.data?.data || res.data?.user || res.data;
+    console.log("🔎 parsed user:", user);
+
+    if (!user?.id) {
+      throw new Error("Không tìm thấy thông tin người dùng.");
+    }
+
+    return { user };
+  } catch (err: unknown) {
+    const error = err as AxiosError<{ message?: string }>;
+    console.error("Lỗi đăng nhập với Google:", error.response?.data || error.message);
+    throw new Error(
+      error.response?.data?.message || error.message || "Đăng nhập với Google thất bại."
+    );
+  }
+}
+
+// =============================
 // ✅ Hàm đăng ký (giữ nguyên)
 // =============================
 export async function register(username: string, email: string, password: string) {

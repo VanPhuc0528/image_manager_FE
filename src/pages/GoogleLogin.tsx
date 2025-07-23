@@ -12,18 +12,16 @@ declare global {
 export interface GoogleUser {
   id: string;
   email: string;
-  name: string;
-  picture: string;
-  given_name: string;
-  family_name: string;
-  email_verified: boolean;
+  username: string;
+  created_at: string;
+  updated_at: string;
+  picture?: string;
 }
 
 const GoogleLogin: React.FC = () => {
   const [user, setUser] = useState<GoogleUser | null>(null);
 
   useEffect(() => {
-    // Load Google SDK
     const initializeGoogleId = () => {
       window.google.accounts.id.initialize({
         client_id: CLIENT_ID,
@@ -39,7 +37,6 @@ const GoogleLogin: React.FC = () => {
     script.onload = initializeGoogleId;
     document.body.appendChild(script);
 
-    // Load user from localStorage
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
       setUser(JSON.parse(savedUser));
@@ -62,25 +59,8 @@ const GoogleLogin: React.FC = () => {
   };
 
   const handleCredentialResponse = (response: any) => {
-    if (!response.credential) {
-      console.warn('No credential received from Google');
-      return;
-    }
-
-    const decoded = parseJwt(response.credential);
-    if (decoded) {
-      const profile: GoogleUser = {
-        id: decoded.sub,
-        email: decoded.email,
-        name: decoded.name,
-        picture: decoded.picture,
-        given_name: decoded.given_name,
-        family_name: decoded.family_name,
-        email_verified: decoded.email_verified,
-      };
-      setUser(profile);
-      localStorage.setItem('user', JSON.stringify(profile));
-    }
+    // Không xử lý trực tiếp ở đây nữa
+    console.log("Credential received:", response);
   };
 
   const loginWithGoogle = async (accessToken: string) => {
@@ -94,15 +74,20 @@ const GoogleLogin: React.FC = () => {
       const data = await res.json();
       console.log('✅ Backend login response:', data);
 
-      const user = data?.data || data?.user || data;
+      const user = data?.user;
+      const token = data?.token;
+
       if (!user?.id) {
         throw new Error('Không tìm thấy thông tin người dùng.');
       }
 
-      // Lưu thông tin nếu cần
       localStorage.setItem('user', JSON.stringify(user));
+      if (token) {
+        localStorage.setItem('token', token);
+      }
+
       setUser(user);
-    } catch (err: unknown) {
+    } catch (err) {
       console.error('❌ Lỗi đăng nhập với Google:', err);
       alert('Đăng nhập thất bại!');
     }
@@ -120,20 +105,8 @@ const GoogleLogin: React.FC = () => {
 
         localStorage.setItem('accessToken', tokenResponse.access_token);
 
-        fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-          headers: {
-            Authorization: `Bearer ${tokenResponse.access_token}`,
-          },
-        })
-          .then((res) => res.json())
-          .then((profile) => {
-            setUser(profile);
-            localStorage.setItem('user', JSON.stringify(profile));
-
-            // Gửi access_token về backend
-            loginWithGoogle(tokenResponse.access_token);
-          })
-          .catch(console.error);
+        // Gửi access_token về backend
+        loginWithGoogle(tokenResponse.access_token);
       },
     });
 
@@ -143,6 +116,7 @@ const GoogleLogin: React.FC = () => {
   const logout = () => {
     setUser(null);
     localStorage.removeItem('user');
+    localStorage.removeItem('token');
     localStorage.removeItem('accessToken');
   };
 
@@ -157,10 +131,15 @@ const GoogleLogin: React.FC = () => {
         </button>
       ) : (
         <div className="text-center space-y-3">
-          <img src={user.picture} alt="avatar" className="w-20 h-20 rounded-full mx-auto" />
-          <div className="font-semibold text-lg">{user.name}</div>
+          {user.picture && (
+            <img src={user.picture} alt="avatar" className="w-20 h-20 rounded-full mx-auto" />
+          )}
+          <div className="font-semibold text-lg">{user.username}</div>
           <div className="text-gray-500 text-sm">{user.email}</div>
-          <button onClick={logout} className="mt-4 bg-red-500 text-white py-2 px-4 rounded-full hover:bg-red-600">
+          <button
+            onClick={logout}
+            className="mt-4 bg-red-500 text-white py-2 px-4 rounded-full hover:bg-red-600"
+          >
             Đăng xuất
           </button>
         </div>
